@@ -1,3 +1,340 @@
+commit 2b0422a2dab93fd29393b7e400a07dc5b75a8da4
+Merge: f5e6783a 545c9430
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jul 21 04:18:24 2026 -0400
+
+    Merge remote-tracking branch 'ArrayBolt3/arraybolt3/trixie'
+
+commit 545c94307bd7dcdcefe67c8061b8dd18caf17b79
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 19 20:14:13 2026 -0400
+
+    printf
+
+commit 46e87db6d5d7d7071d3766a5f9b20b880cd54b10
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 19 20:12:46 2026 -0400
+
+    end-of-options
+
+commit e9b3374a305ace3d6c40cc5143627e31c38602b2
+Merge: b9a492bb 90b514c7
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 19 20:09:33 2026 -0400
+
+    Merge remote-tracking branch 'maybebyte/fix/hide-hardware-info-getent' into arraybolt3/trixie
+
+commit b9a492bb071a4726672f0b0c14a7586c60536e21
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 19 19:46:33 2026 -0400
+
+    Revert "udev: mark optical drives UDISKS_IGNORE (quiet + harden)"
+
+    This reverts commit 41638e64911a7f019b32cacd5a368ec480fcc21a. The change
+    was made to avoid a spurious error in CI, and the underlying issue has
+    been fixed in a different way now, so this is no longer needed.
+
+commit aab24f84e4677d9447d339c5f6ee0699f8e0b97b
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 19 19:23:52 2026 -0400
+
+    Don't use required dependencies in emerg-shutdown to keep systemd from terminating it when the boot drive is removed
+
+commit 097880e26749bc874ba266cadaa84a8a3925dc4a
+Merge: 0a4386b1 81096c4b
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 19 18:03:32 2026 -0400
+
+    Merge remote-tracking branch 'maybebyte/fix/emerg-shutdown-fd-leak-sigsys' into arraybolt3/trixie
+
+commit 0a4386b1927a76f0d3d6010d33bd9f1b5b23af89
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 19 18:03:01 2026 -0400
+
+    Swallow signals in emerg-shutdown's hardware monitor mode too
+
+commit 7d1553c5136942c38c59d4d5c8cec673e2ba1f06
+Merge: f5e6783a 6dc96859
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 19 11:47:42 2026 -0400
+
+    Merge remote-tracking branch 'maybebyte/fix/virusforget-error-handling' into arraybolt3/trixie
+
+commit f5e6783afe645a9bded31e63241d2b76f9945807
+Merge: f9853503 57b0072b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 19 03:40:40 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit f9853503c5847d960d83499c6d8ef02ce8e045fd
+Merge: b39215e4 f3a060ed
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 19 03:39:58 2026 -0400
+
+    Merge remote-tracking branch 'ArrayBolt3/arraybolt3/trixie'
+
+commit f3a060ed528a66f3524206a22108b59e3de67ef2
+Merge: 89745aab 6f3f6425
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 19 01:28:06 2026 -0400
+
+    Merge remote-tracking branch 'maybebyte/docs/config-section-numbering' into arraybolt3/trixie
+
+commit 89745aabf7931aad32ea437b6e644146a63d46a3
+Merge: 27009709 b39215e4
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 19 01:19:36 2026 -0400
+
+    Merge branch 'master' into arraybolt3/trixie
+
+commit 2700970971f97a732ef1d53c407c8e2e6d2b575d
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 19 01:08:29 2026 -0400
+
+    Fix messaging when a file with multiple hardlinks is skipped over
+
+commit 7a603055bf11f7d0d4162d4c437aa95f034ebb89
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 19 00:55:13 2026 -0400
+
+    Fix output when permission-hardener encounters a file with multiple hardlinks
+
+commit 9a3e8851404f6e6a1fa1fcfefebe68b17dd6dbb7
+Merge: 98c27d90 1625a3db
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 19 00:48:40 2026 -0400
+
+    Merge remote-tracking branch 'maybebyte/fix/permission-hardener-whitelist-and-errexit' into arraybolt3/trixie
+
+commit 57b0072b0194848b5bc3816efb4b243bba343141
+Author: assisted-by-ai (Bot Account) (Machine Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Sat Jul 18 20:00:25 2026 -0400
+
+    Coverity: point CI at the org-ai-assisted-security-misc project
+
+commit b39215e47fc127ef41951b7d686237c1e48dc9ba
+Merge: 4ed85e1f 26ef321b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Jul 18 16:26:00 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit 4ed85e1f6114fa74debc17b88eeb165c4f8afc15
+Merge: 59decfa2 98c27d90
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Jul 18 16:24:30 2026 -0400
+
+    Merge remote-tracking branch 'ArrayBolt3/arraybolt3/trixie'
+
+commit 98c27d9074f31cfeb006ecce1aef10a90e06a8c7
+Merge: c3ec2119 b076e2c0
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Fri Jul 17 21:12:46 2026 -0400
+
+    Merge remote-tracking branch 'maybebyte/fix/ensure-shutdown-nounset-default' into arraybolt3/trixie
+
+commit c3ec2119b2fa7e8c172fe7a63686b98e66b3c35e
+Merge: 59decfa2 1a71a3e9
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Fri Jul 17 21:02:54 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/comment-bdev-allow-write-aYEla' into arraybolt3/trixie
+
+commit 26ef321b73377254da64007362fdadfa602fb384
+Merge: 55c087cc 41638e64
+Author: assisted-by-ai (Bot Account) (Machine Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Wed Jul 15 23:46:34 2026 -0400
+
+    Merge pull request #20 from org-ai-assisted/udisks-ignore-optical
+
+    udev: UDISKS_IGNORE optical drives
+
+commit 41638e64911a7f019b32cacd5a368ec480fcc21a
+Author: assisted-by-ai <assisted-by-ai@users.noreply.github.com>
+Date:   Wed Jul 15 23:34:07 2026 -0400
+
+    udev: mark optical drives UDISKS_IGNORE (quiet + harden)
+
+    udisks auto-probing removable optical media (sr*) is noisy -- on a drive with no
+    or inert media (e.g. a VM CD-ROM) it errors repeatedly ('udisksd: Error probing
+    device: Error sending ATA command IDENTIFY PACKET DEVICE to /dev/sr0') -- and is
+    avoidable attack surface: inserted media should not be auto-processed without
+    user action. Add a udev rule marking optical drives UDISKS_IGNORE. This does NOT
+    affect booting the live ISO from optical media: rd.live mounts the medium in the
+    initramfs, not via userspace udisks. (AI-Assisted.)
+
+commit 90b514c7cdc33fa8237cf19b8e7a49827290de44
+Author: Ashlen <dev@anthes.is>
+Date:   Wed Jul 15 16:43:40 2026 -0600
+
+    fix(hide-hardware-info): look up group with getent
+
+    The sysfs/cpuinfo whitelist gated its chgrp/chmod on
+    `grep -q "${1}" /etc/group`, an unanchored substring match over the
+    whole file. A group whose name merely contains the string, or a user
+    listed as a member of any group, produced a false positive: the branch
+    ran chgrp against a group that does not exist (silently swallowed by
+    `|| true`) and suppressed the "group does not exist" warning, so an
+    admin who never created the group was told nothing.
+
+    Use `getent group "${1}"` instead. It matches by exact group name or
+    GID and consults NSS, so groups from non-file sources are recognized
+    as well.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit 6f3f6425eed69a50fe747262ce8d62d365432273
+Author: Ashlen <dev@anthes.is>
+Date:   Wed Jul 15 12:28:01 2026 -0600
+
+    docs: correct section numbering in config comments
+
+    The sysctl config header claimed 5 sections while its list
+    enumerates 6 (through CD-ROM/DVD); update the count to 6.
+
+    The modprobe config's Networking section header read "2.",
+    duplicating the File Systems section, while its own table of
+    contents and the following "4. Miscellaneous" section imply 3;
+    correct it to "3.".
+
+commit 1625a3db8fbb94da8c5558c52d9b7b481ce031cd
+Author: Ashlen <dev@anthes.is>
+Date:   Wed Jul 15 12:15:57 2026 -0600
+
+    fix(permission-hardener): skip hardlinked files instead of aborting
+
+    output_stat returned 1 for a non-directory SUID/SGID file with a
+    hardlink count > 1. The four call sites invoke output_stat as a bare
+    command under `set -o errexit`, so that return propagated and
+    terminated the whole run instead of skipping the file. The following
+    `if [ -z "${file_name_from_stat}" ]` guard never caught this case
+    because file_name_from_stat was already populated.
+
+    The surrounding comment states hardlinked files are meant to be
+    skipped (scanning a hardlink pool is too costly). Blank the output
+    vars and return 0, matching the existing nonexistent-file skip path,
+    so the caller's empty-name check continues past the file. Genuine
+    error paths (stat failure, parse corruption) still return 1 and fail
+    loud.
+
+commit 4af4392bc3f2c37784d11a6b49cb1b9eb7d9c3d9
+Author: Ashlen <dev@anthes.is>
+Date:   Wed Jul 15 12:15:22 2026 -0600
+
+    fix(permission-hardener): prevent fail-open on empty matchwhitelist
+
+    check_nosuid_whitelist iterated with
+    "${policy_match_white_list[@]:-}". Under `set -o nounset` the `:-`
+    default expands an empty array to a single empty-string element, so
+    the loop ran once with an empty entry. The body test
+    `[[ "${target_file}" == *""* ]]` matches every string, so the
+    function returned 1 (whitelisted) for every file. Both callers use
+    `|| continue`, so an effective config with no `matchwhitelist` line
+    silently skipped all SUID/SGID hardening with exit 0 -- a fail-open.
+
+    Expand with ${arr[@]+"${arr[@]}"} instead, which yields no elements
+    when the array is empty and does not trip nounset.
+
+commit 81096c4b8fd58b42c04c486e89b1ff016365f62a
+Author: Ashlen <dev@anthes.is>
+Date:   Wed Jul 15 11:45:21 2026 -0600
+
+    fix(emerg-shutdown): swallow SIGSYS in signal-ignore loop
+
+    max_sig_num is 31, but the SIG_IGN loop used a strict "<" bound, so it
+    covered signals 1..30 and never touched signal 31 (SIGSYS on Linux).
+    The real-time loop starts at SIGRTMIN, leaving SIGSYS covered by neither
+    loop, so it kept its default terminate disposition despite the "Swallow
+    all signals that we can." intent.
+
+    Use "<=" so the loop reaches 31; SIGSYS is ignorable, and the bound
+    still stops before the glibc-reserved signals 32 and 33. This is a
+    robustness fix, not a hardening gain: SIGKILL and SIGSTOP are unblockable
+    anyway, so an actor able to send SIGSYS can already kill the monitor --
+    the value is surviving an internally generated SIGSYS (e.g. a bad
+    syscall).
+
+commit 5bb3f0114bc6941506d432018487c35c3c19032d
+Author: Ashlen <dev@anthes.is>
+Date:   Wed Jul 15 11:44:40 2026 -0600
+
+    fix(emerg-shutdown): close fds for non-panic input devices
+
+    The input-device enumeration loop opens a descriptor for every
+    /dev/input/eventN but only stores it for devices that support the
+    panic-key combo. The two early-continue paths -- non-key devices and
+    keyboards lacking the panic keys -- returned without closing tmp_fd,
+    leaking one descriptor per non-qualifying device.
+
+    The leak is bounded and one-time (the loop runs once at startup, not in
+    the poll loop) so impact is low, but the descriptors are held for the
+    whole process lifetime and never reclaimed -- the daemon never execs,
+    so O_CLOEXEC does not cover them. Close tmp_fd before both continues.
+
+commit b076e2c0b3a8a83fe2b11dc1b09b1c9f72301db6
+Author: Ashlen <dev@anthes.is>
+Date:   Wed Jul 15 11:25:07 2026 -0600
+
+    fix(ensure-shutdown): apply timeout default under nounset
+
+    The script runs under 'set -o nounset'. When no config file assigns
+    ENSURE_SHUTDOWN_TIMEOUT, the bare "${ENSURE_SHUTDOWN_TIMEOUT}" in the
+    fallback guard raises an unbound-variable error and aborts before the
+    guard can apply the default, so ExecStart never starts the shutdown
+    monitor. Add the ':-' default in the -z test so the guard runs and
+    falls back to 30. The sibling emerg-shutdown wrapper avoids this by
+    pre-initializing its config variables before sourcing.
+
+commit 6dc96859dd7f350673cc917a8c41da8144357e62
+Author: Ashlen <dev@anthes.is>
+Date:   Wed Jul 15 10:59:09 2026 -0600
+
+    fix(virusforget): exit when --user does not exist
+
+    The nonexistent-user branch printed a warning but, unlike every sibling
+    validation branch, neither exited nor wrote to stderr, so a mistyped
+    --user proceeded to operate on a bogus /home/<user> path. Send the error
+    to stderr and exit 1.
+
+commit a39b03ac2e18a83f73e4e320481323fc8ef8a795
+Author: Ashlen <dev@anthes.is>
+Date:   Wed Jul 15 10:58:42 2026 -0600
+
+    fix(virusforget): skip restore when backup is absent
+
+    An extraneous file (present in the home directory but absent from the
+    committed backup) is deleted and then unconditionally passed to
+    restore_file, which runs `cp` from a backup path that does not exist.
+    Under `set -e` this aborts the entire `--clean` run on the first such
+    file, leaving the system partially cleaned -- the exact
+    malware-persistence scenario the tool exists to handle.
+
+    Return early from restore_file when no backup exists. Deleting the
+    extraneous file is the correct action and is already done by the caller
+    (which keeps a forensic copy under the dangerous/ folder). The guard is
+    transparent to the missing-file and modified-file callers, which always
+    have a backup present.
+
+commit 55c087cc9bda321db860541f9030207a59505cb7
+Author: assisted-by-ai (Bot Account) (Machine Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Mon Jul 13 11:48:30 2026 -0400
+
+    codeql-prepare: multi-line case arms (R-070) + complete strict-mode block (#19)
+
+    Expand the two compact case arms to the fully multi-line form per R-070.
+    The touched file was 4/6 on the R-010 strict-mode block; add the missing
+    'shopt -s inherit_errexit' and 'shopt -s shift_verbose' so it is fully green.
+    No behavior change.
+
+    Co-authored-by: claude (dev71 31548627-e7c1-43cd-bd41-8b0900c72576) <noreply@anthropic.com>
+
+commit 59decfa257b7a560691183945e9c4ec1830d7241
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 22:20:10 2026 +0000
+
+    bumped changelog version
+
 commit be771dea0be5bf34c13bb4ab0054199934eb4dc8
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Wed May 20 16:57:12 2026 -0400
@@ -1410,6 +1747,22 @@ Author: Aaron Rainbolt <arraybolt3@gmail.com>
 Date:   Thu Apr 9 23:29:26 2026 -0400
 
     Standardize on one form of bullets in README.md
+
+commit 1a71a3e954060aaf06a3daf491168bdf31942dc5
+Author: Claude <noreply@anthropic.com>
+Date:   Thu Apr 9 12:06:54 2026 +0000
+
+    comment out bdev_allow_write_mounted=0
+
+    Causes breakages with disk management operations such as disk
+    resizing and VDI compaction in virtual machines.
+
+    https://github.com/Kicksecure/security-misc/pull/334
+    https://forums.whonix.org/t/kernel-hardening-security-misc/7296/609
+    https://forums.whonix.org/t/how-to-compress-and-prevent-vdi-from-ballooning-after-each-update-deleting-large-files/22675/9
+    https://forums.kicksecure.com/t/resizing-disk-for-guest-in-kvm/1657
+
+    https://claude.ai/code/session_01Cd9ka8sC7zLUvB31V4kxMk
 
 commit f64fc3e1645ec2661b518e64f4454dc9ef85cf49
 Author: Patrick Schleizer <adrelanos@whonix.org>
