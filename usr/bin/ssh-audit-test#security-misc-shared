@@ -12,6 +12,12 @@
 ## (the policy sets allow_algorithm_subset_and_reordering = false). No legacy,
 ## no backwards compatibility.
 ##
+## Scope: ssh-audit's policy compares the server-to-client algorithm lists.
+## OpenSSH's Ciphers/MACs/KexAlgorithms apply to BOTH directions from a single
+## list, so a security-misc-configured (OpenSSH) target is symmetric and the
+## check is complete. It would not catch a non-OpenSSH peer offering weaker
+## client-to-server algorithms only, which is not a target here.
+##
 ## Usage: ssh-audit-test [--policy FILE] [--port PORT] [HOST ...]
 ##   default target 127.0.0.1:22, default policy the installed server policy.
 ##
@@ -43,12 +49,18 @@ hosts=()
 while [ "$#" -gt 0 ]; do
    case "$1" in
       --policy)
-         shift
-         policy="${1:-}"
+         if [ "$#" -lt 2 ]; then
+            die "option --policy requires a value"
+         fi
+         policy="$2"
+         shift 2
          ;;
       --port)
-         shift
-         port="${1:-}"
+         if [ "$#" -lt 2 ]; then
+            die "option --port requires a value"
+         fi
+         port="$2"
+         shift 2
          ;;
       --)
          shift
@@ -63,9 +75,9 @@ while [ "$#" -gt 0 ]; do
          ;;
       *)
          hosts+=( "$1" )
+         shift
          ;;
    esac
-   shift
 done
 
 command -v ssh-audit >/dev/null 2>&1 \
