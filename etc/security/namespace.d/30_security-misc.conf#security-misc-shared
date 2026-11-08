@@ -21,7 +21,7 @@
 ##
 ## Columns: polydir  instance_prefix  method[:flags]  excluded_users
 ##   - /tmp, /dev/shm instances live on a dedicated nosuid,nodev,noexec tmpfs
-##     (/run/security-misc, run-security\x2dmisc.mount): RAM-backed, wiped at
+##     (/run/pam-namespace, run-pam\x2dnamespace.mount): RAM-backed, wiped at
 ##     reboot, and the hardened mount options are inherited through the bind
 ##     (the 'user' method cannot set mntopts itself, unlike 'tmpfs'). noexec
 ##     mirrors the system's global mount-hardening policy for /tmp and /dev/shm.
@@ -35,6 +35,6 @@
 ## https://www.kicksecure.com/wiki/Dev/Strong_Linux_User_Account_Isolation
 ## man namespace.conf
 
-/tmp       /run/security-misc/tmp-inst/   user:iscript=/usr/libexec/security-misc/pam-namespace-init   root,adm
+/tmp       /run/pam-namespace/tmp-inst/   user:iscript=/usr/libexec/security-misc/pam-namespace-init   root,adm
 /var/tmp   /var/tmp/tmp-inst/             user   root,adm
-/dev/shm   /run/security-misc/shm-inst/   user   root,adm
+/dev/shm   /run/pam-namespace/shm-inst/   user   root,adm

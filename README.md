@@ -784,7 +784,7 @@ documents that `systemd --user` needs its own `pam_namespace` call). `root` and
 Backing store per directory:
 
 - `/tmp` and `/dev/shm` instances live on a dedicated tmpfs mounted
-  `nosuid,nodev,noexec` (`/run/security-misc`, unit `run-security\x2dmisc.mount`).
+  `nosuid,nodev,noexec` (`/run/pam-namespace`, unit `run-pam\x2dnamespace.mount`).
   They are therefore RAM-backed and wiped at every reboot (matching Debian's
   `/tmp` convention), and the hardened mount options are inherited through the
   bind mount - the `user` method cannot set `mntopts` itself, unlike the `tmpfs`
@@ -805,7 +805,7 @@ See:
 - `/etc/security/namespace.d/30_security-misc.conf`
 - `/usr/libexec/security-misc/pam-namespace-init`
 - `/usr/lib/tmpfiles.d/30_security-misc-polyinstantiation.conf`
-- `/usr/lib/systemd/system/run-security\x2dmisc.mount`
+- `/usr/lib/systemd/system/run-pam\x2dnamespace.mount`
 - https://www.kicksecure.com/wiki/Dev/Strong_Linux_User_Account_Isolation
 
 ### SUID / SGID removal and permission hardening

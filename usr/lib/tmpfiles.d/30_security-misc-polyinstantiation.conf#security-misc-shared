@@ -11,7 +11,7 @@
 ## laxer mode would let one account reach another's instance).
 ##
 ## /tmp and /dev/shm instances live on the dedicated hardened tmpfs
-## /run/security-misc (run-security\x2dmisc.mount); it is a fresh tmpfs at every
+## /run/pam-namespace (run-pam\x2dnamespace.mount); it is a fresh tmpfs at every
 ## boot, so these two parents are recreated here each boot (the mount unit is
 ## ordered before systemd-tmpfiles-setup). /var/tmp is on-disk and persistent:
 ## Debian ships 'q /var/tmp 1777 root root 30d', whose age cleanup would wipe
@@ -19,7 +19,7 @@
 ## is required), so the 'x' line excludes that subtree from age cleanup.
 ##
 ## man tmpfiles.d
-d /run/security-misc/tmp-inst  0000 root root -
-d /run/security-misc/shm-inst  0000 root root -
+d /run/pam-namespace/tmp-inst  0000 root root -
+d /run/pam-namespace/shm-inst  0000 root root -
 d /var/tmp/tmp-inst            0000 root root -
 x /var/tmp/tmp-inst

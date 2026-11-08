@@ -14,7 +14,7 @@
 ##
 ## size=50% mirrors systemd's own tmp.mount; note this one tmpfs backs /tmp AND
 ## /dev/shm for every account, so the cap is shared (tune if needed).
-## Unit filename is the systemd-escaped form of the mount path /run/security-misc.
+## Unit filename is the systemd-escaped form of the mount path /run/pam-namespace.
 
 [Unit]
 Description=Hardened tmpfs for pam_namespace polyinstantiation instances
@@ -26,7 +26,7 @@ Before=umount.target
 
 [Mount]
 What=tmpfs
-Where=/run/security-misc
+Where=/run/pam-namespace
 Type=tmpfs
 Options=nosuid,nodev,noexec,mode=0755,size=50%
 
