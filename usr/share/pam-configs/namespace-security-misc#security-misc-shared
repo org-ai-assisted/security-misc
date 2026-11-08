@@ -2,5 +2,6 @@ Name: Polyinstantiate per-account temporary directories (by package security-mis
 Default: yes
 Priority: 128
 Session-Type: Additional
+Session-Interactive-Only: yes
 Session:
 	required	pam_namespace.so

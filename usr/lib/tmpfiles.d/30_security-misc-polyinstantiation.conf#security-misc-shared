@@ -17,5 +17,12 @@
 ## empty filesystem and does NOT use an instance-parent dir (verified), so
 ## none is created for them.
 ##
+## Debian ships 'q /var/tmp 1777 root root 30d', whose age cleanup recurses into
+## /var/tmp/tmp-inst and would wipe the per-account instances and eventually
+## rmdir the parent - which, with pam_namespace 'required', denies login until
+## the next boot recreates it. The 'x' line excludes the subtree (path and
+## contents) from that age-based cleanup; age '-' on the 'd' line alone does not.
+##
 ## man tmpfiles.d
 d /var/tmp/tmp-inst  0000 root root -
+x /var/tmp/tmp-inst
