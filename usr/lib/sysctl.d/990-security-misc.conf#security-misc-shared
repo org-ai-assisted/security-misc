@@ -91,6 +91,25 @@ dev.tty.ldisc_autoload=0
 ##
 vm.unprivileged_userfaultfd=0
 
+## Restrict memfd_create() to non-executable, execute-sealed memory.
+## Code written into an anonymous memfd and then executed is a fileless-execution
+## vector that bypasses noexec mount points; this is the complement of noexec
+## mounts (see remount-secure) toward a write-xor-execute (W^X) policy.
+## Value 2 forces the MFD_NOEXEC_SEAL default and additionally refuses explicit
+## MFD_EXEC requests, so no process can obtain an executable memfd.
+## Available since Linux 6.3. Per-PID-namespace: a child namespace (sandbox or
+## container) cannot weaken a stricter host value.
+## Browsers are unaffected; their JITs use anonymous PROT_EXEC mappings, not memfd.
+## Known to break software that executes from an executable memfd, such as some
+## container runtimes that re-execute themselves via memfd. To relax, override
+## with a sysctl.d drop-in setting vm.memfd_noexec=1 (non-executable default,
+## explicit MFD_EXEC still allowed) or =0 (kernel default).
+##
+## https://docs.kernel.org/admin-guide/sysctl/vm.html
+## https://man7.org/linux/man-pages/man2/memfd_create.2.html
+##
+vm.memfd_noexec=2
+
 ## Disables kexec, which can be used to replace the running kernel.
 ## Useful for live kernel patching without rebooting.
 ##
