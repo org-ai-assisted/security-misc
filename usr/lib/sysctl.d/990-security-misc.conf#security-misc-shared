@@ -91,21 +91,29 @@ dev.tty.ldisc_autoload=0
 ##
 vm.unprivileged_userfaultfd=0
 
-## Restrict memfd_create() to non-executable, execute-sealed memory.
-## Code written into an anonymous memfd and then executed is a fileless-execution
-## vector that bypasses noexec mount points; this is the complement of noexec
-## mounts (see remount-secure) toward a write-xor-execute (W^X) policy.
-## Value 2 forces the MFD_NOEXEC_SEAL default and additionally refuses explicit
-## MFD_EXEC requests, so no process can obtain an executable memfd.
+## Harden memfd_create(): default new anonymous memfds to non-executable,
+## execute-sealed memory and reject explicit MFD_EXEC.
+## Targets the common fileless-execution pattern that bypasses noexec mounts:
+## memfd_create() followed by execveat()/fexecve() of the anonymous fd. At value
+## 2 a default memfd cannot be run via the exec syscalls, and its execute mode
+## bit cannot be set with chmod.
+## This is a bar-raiser, NOT write-xor-execute. Verified on Linux 6.12: an
+## executable mapping of such a memfd is still obtainable via mmap(PROT_EXEC) or
+## mprotect, and the execute bit can still be added through a POSIX ACL (setfacl)
+## and the fd then exec'd. Full W^X needs an LSM (for example SELinux execmem),
+## not this sysctl alone.
+## Side effect: at value 1 and 2 a default memfd is created sealable
+## (MFD_ALLOW_SEALING is implied), so a peer holding the fd can add write or
+## shrink seals that a value 0 default memfd would refuse.
 ## Available since Linux 6.3. Per-PID-namespace: a child namespace (sandbox or
 ## container) cannot weaken a stricter host value.
-## Browsers are unaffected; their JITs use anonymous PROT_EXEC mappings, not memfd.
-## Known to break software that executes from an executable memfd, such as some
-## container runtimes that re-execute themselves via memfd. To relax, override
-## with a sysctl.d drop-in setting vm.memfd_noexec=1 (non-executable default,
-## explicit MFD_EXEC still allowed) or =0 (kernel default).
+## May break software that runs code from a memfd via the exec syscalls, such as
+## some container runtimes that re-execute themselves via memfd. To relax, add a
+## drop-in whose filename sorts after this one (for example
+## /etc/sysctl.d/991-memfd.conf) with vm.memfd_noexec=1 or =0; a 99-* or
+## lower-numbered name is applied before 990-security-misc.conf and has no effect.
 ##
-## https://docs.kernel.org/admin-guide/sysctl/vm.html
+## https://docs.kernel.org/userspace-api/mfd_noexec.html
 ## https://man7.org/linux/man-pages/man2/memfd_create.2.html
 ##
 vm.memfd_noexec=2
