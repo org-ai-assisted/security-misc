@@ -3,26 +3,23 @@
 
 ## AI-Assisted
 
-## Instance-parent directory for the pam_namespace 'user'-method polydir
-## /var/tmp (/etc/security/namespace.d/30_security-misc.conf).
+## Instance-parent directories for pam_namespace polyinstantiation
+## (/etc/security/namespace.d/30_security-misc.conf).
 ##
-## pam_namespace requires the instance_prefix parent to pre-exist, owned
+## pam_namespace requires each instance_prefix parent to pre-exist, owned
 ## root:root, mode 0000 (the restrictive mode is the isolation guarantee; a
-## laxer mode would let one account reach another's instance). Shipping it via
-## tmpfiles.d (not postinst) makes it self-healing: recreated at every boot
-## with the enforced mode, surviving reboots and systemd-tmpfiles age cleanup.
-## Age argument '-' means never auto-clean the per-account instances inside.
+## laxer mode would let one account reach another's instance).
 ##
-## The /tmp and /dev/shm lines use the 'tmpfs' method, which mounts a fresh
-## empty filesystem and does NOT use an instance-parent dir (verified), so
-## none is created for them.
-##
-## Debian ships 'q /var/tmp 1777 root root 30d', whose age cleanup recurses into
-## /var/tmp/tmp-inst and would wipe the per-account instances and eventually
-## rmdir the parent - which, with pam_namespace 'required', denies login until
-## the next boot recreates it. The 'x' line excludes the subtree (path and
-## contents) from that age-based cleanup; age '-' on the 'd' line alone does not.
+## /tmp and /dev/shm instances live on the dedicated hardened tmpfs
+## /run/security-misc (run-security\x2dmisc.mount); it is a fresh tmpfs at every
+## boot, so these two parents are recreated here each boot (the mount unit is
+## ordered before systemd-tmpfiles-setup). /var/tmp is on-disk and persistent:
+## Debian ships 'q /var/tmp 1777 root root 30d', whose age cleanup would wipe
+## the instances and eventually rmdir the parent (denying login, as the module
+## is required), so the 'x' line excludes that subtree from age cleanup.
 ##
 ## man tmpfiles.d
-d /var/tmp/tmp-inst  0000 root root -
+d /run/security-misc/tmp-inst  0000 root root -
+d /run/security-misc/shm-inst  0000 root root -
+d /var/tmp/tmp-inst            0000 root root -
 x /var/tmp/tmp-inst

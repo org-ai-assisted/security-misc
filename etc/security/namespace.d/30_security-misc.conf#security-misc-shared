@@ -12,39 +12,29 @@
 ## bypassed by any program that hardcodes /tmp - pam_namespace gives a real
 ## private mount, so hardcoded /tmp is isolated too.
 ##
+## Method 'user': ONE instance per account, shared across ALL of that account's
+## PAM sessions - interactive login, the systemd --user manager, and cron - so
+## they agree on /tmp and /dev/shm (no systemd --user split; background-service
+## temp files are isolated too). This requires pam_namespace to run in the
+## non-interactive stack as well, so the pam-config is NOT interactive-only and
+## carries unmnt_remnt (see namespace-security-misc).
+##
 ## Columns: polydir  instance_prefix  method[:flags]  excluded_users
-##   - method 'user'  -> one instance per account, shared across that account's
-##                       sessions, persists (on-disk backing).
-##   - method 'tmpfs' -> a fresh empty RAM-backed instance per session; mntopts
-##                       hardens the mount independently of remount-secure.
-##   - excluded users 'root,adm' keep the shared dirs for system/daemon logins.
+##   - /tmp, /dev/shm instances live on a dedicated nosuid,nodev,noexec tmpfs
+##     (/run/security-misc, run-security\x2dmisc.mount): RAM-backed, wiped at
+##     reboot, and the hardened mount options are inherited through the bind
+##     (the 'user' method cannot set mntopts itself, unlike 'tmpfs'). noexec
+##     mirrors the system's global mount-hardening policy for /tmp and /dev/shm.
+##   - /var/tmp uses an on-disk per-account instance (FHS: persists at reboot).
+##   - root and adm are excluded so system/daemon logins keep the shared dirs.
 ##
-## Rationale per directory:
-##   /tmp     tmpfs - keep it RAM-only (anti-forensics); nothing in /tmp is
-##            meant to survive a session.
-##
-## mntopts (nosuid,nodev,noexec) mirror the system's global mount-hardening
-## policy for /tmp and /dev/shm. pam_namespace is the ONLY enforcement point
-## that reaches these per-session tmpfs instances: a boot-time global remount
-## cannot touch a mount created later inside the session's private namespace,
-## so the policy must be applied here too or the per-user /tmp and /dev/shm
-## silently lose the hardening the global mounts have.
-##   /var/tmp user  - FHS: persists across reboots; per-account on-disk instance.
-##   /dev/shm tmpfs - RAM-only POSIX shared memory; fresh per session.
-##
-## iscript on /tmp recreates the X11/ICE socket dirs inside the fresh instance
-## (see pam-namespace-init). $HOME is deliberately NOT polyinstantiated - that
-## would hide the user's own data and only makes sense on SELinux MLS systems.
-##
-## The instance_prefix field is mandatory but is UNUSED by the tmpfs method
-## (it mounts a fresh filesystem, not a dir under the prefix); the /tmp-inst/
-## and /dev/shm-inst/ values below are placeholders and no such dir is created.
-## Only the user-method /var/tmp has a real instance parent (/var/tmp/tmp-inst,
-## created 0000 root:root via tmpfiles.d 30_security-misc-polyinstantiation).
+## iscript on /tmp recreates the X11/ICE socket dirs inside a freshly created
+## instance (see pam-namespace-init). $HOME is deliberately NOT polyinstantiated
+## - that would hide the user's own data and only makes sense on SELinux MLS.
 ##
 ## https://www.kicksecure.com/wiki/Dev/Strong_Linux_User_Account_Isolation
 ## man namespace.conf
 
-/tmp       /tmp-inst/          tmpfs:mntopts=nosuid,nodev,noexec:iscript=/usr/libexec/security-misc/pam-namespace-init   root,adm
-/var/tmp   /var/tmp/tmp-inst/  user   root,adm
-/dev/shm   /dev/shm-inst/      tmpfs:mntopts=nosuid,nodev,noexec   root,adm
+/tmp       /run/security-misc/tmp-inst/   user:iscript=/usr/libexec/security-misc/pam-namespace-init   root,adm
+/var/tmp   /var/tmp/tmp-inst/             user   root,adm
+/dev/shm   /run/security-misc/shm-inst/   user   root,adm

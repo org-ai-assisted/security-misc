@@ -101,6 +101,7 @@ usr/lib/systemd/system/permission-hardener.service#security-misc-shared => /usr/
 usr/lib/systemd/system/proc-hidepid.service#security-misc-shared => /usr/lib/systemd/system/proc-hidepid.service
 usr/lib/systemd/system/remount-secure.service#security-misc-shared => /usr/lib/systemd/system/remount-secure.service
 usr/lib/systemd/system/remove-system-map.service#security-misc-shared => /usr/lib/systemd/system/remove-system-map.service
+usr/lib/systemd/system/run-security\x2dmisc.mount#security-misc-shared => /usr/lib/systemd/system/run-security\x2dmisc.mount
 usr/lib/systemd/system/sysinit-post.target#security-misc-shared => /usr/lib/systemd/system/sysinit-post.target
 usr/lib/systemd/system/usbguard.service.d/30_security-misc.conf#security-misc-shared => /usr/lib/systemd/system/usbguard.service.d/30_security-misc.conf
 usr/lib/systemd/system/user@.service.d/sysfs.conf#security-misc-shared => /usr/lib/systemd/system/user@.service.d/sysfs.conf

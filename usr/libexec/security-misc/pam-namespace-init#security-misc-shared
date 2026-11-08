@@ -13,11 +13,12 @@
 ##   $1 polydir  $2 instance_dir  $3 newly_created(0|1)  $4 user
 ##   $5 polydir_path_safe(0|1)    $6 instance_path_safe(0|1)
 ##
-## Purpose: a fresh per-session /tmp (tmpfs method) starts empty, so the X11 and
-## ICE socket directories are absent. Recreate them mode 1777 so Xwayland and
-## any client that binds or stats /tmp/.X11-unix keeps working. No-op for every
-## other polydir. No SELinux handling and no $HOME logic - security-misc never
-## polyinstantiates $HOME.
+## Purpose: a freshly created /tmp instance starts empty, so the X11 and ICE
+## socket directories are absent. Recreate them mode 1777 so Xwayland and any
+## client that binds or stats /tmp/.X11-unix keeps working. Idempotent
+## (install --directory), so re-running it on each session is harmless. No-op
+## for every other polydir. No SELinux handling and no $HOME logic -
+## security-misc never polyinstantiates $HOME.
 
 set -o errexit
 set -o nounset

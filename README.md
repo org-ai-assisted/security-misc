@@ -764,39 +764,39 @@ See:
 The shared, world-writable temporary directories `/tmp`, `/var/tmp`, and
 `/dev/shm` are polyinstantiated per account using the PAM module
 `pam_namespace`, so one account cannot see, read, race, or predict another
-account's temporary files. Each login session receives a private mount of
-these directories in its own mount namespace.
+account's temporary files.
 
 This is stronger than `libpam-tmpdir`, which only sets `$TMPDIR` / `$TMP` and
 is bypassed by any program that hardcodes `/tmp`. `libpam-tmpdir` is kept as
 complementary defense in depth: `pam_namespace` is ordered before it, so
 `$TMPDIR` is set inside the already-private `/tmp`.
 
-Polyinstantiation is applied to interactive login sessions only (the
-`pam-auth-update` profile is `Session-Interactive-Only`). Upstream considers
-`pam_namespace` unsuitable for the shared stack that `su`/`sudo`/`runuser`
-include - systemd commit `0ef48896` (which adds the `systemd --user` call)
-states: "Both calls are not suitable for inclusion in the shared part of the
-stack (e.g. @system-auth on Fedora/RHEL systems), because for example
-su/sudo/runuser should not include them." A consequence is that `systemd --user`
-services and cron jobs use the global temporary directories, not a private
-instance.
+All three directories use the `user` method: one instance per account, shared
+across all of that account's PAM sessions. This deliberately includes the
+non-interactive stack (`common-session-noninteractive`), so the `systemd --user`
+manager and cron jobs see the same instance as the interactive login session -
+otherwise, since `systemd --user` runs in its own mount namespace, its services'
+temporary files would land in the global directories (systemd commit `0ef48896`
+documents that `systemd --user` needs its own `pam_namespace` call). `root` and
+`adm` are excluded, so `su`/`sudo` to root is a no-op; the module carries
+`unmnt_remnt` so `su` to another account re-binds cleanly instead of nesting.
 
-Methods per directory:
+Backing store per directory:
 
-- `/tmp` and `/dev/shm` use the `tmpfs` method: a fresh, empty, RAM-backed
-  instance per session, mounted `nosuid,nodev,noexec`. These mount options
-  mirror the system's global mount-hardening policy; because a boot-time global
-  remount cannot reach a mount created later inside the session's private
-  namespace, `pam_namespace` is the only enforcement point for these per-session
-  instances, so it applies the same policy rather than omitting it.
-- `/var/tmp` uses the `user` method: a per-account on-disk instance under
-  `/var/tmp/tmp-inst/`, which persists across reboots per FHS.
+- `/tmp` and `/dev/shm` instances live on a dedicated tmpfs mounted
+  `nosuid,nodev,noexec` (`/run/security-misc`, unit `run-security\x2dmisc.mount`).
+  They are therefore RAM-backed and wiped at every reboot (matching Debian's
+  `/tmp` convention), and the hardened mount options are inherited through the
+  bind mount - the `user` method cannot set `mntopts` itself, unlike the `tmpfs`
+  method, and a boot-time global remount cannot reach a mount created later, so
+  this dedicated tmpfs is how `/tmp` and `/dev/shm` get `noexec` to mirror the
+  system's global mount-hardening policy.
+- `/var/tmp` uses an on-disk per-account instance under `/var/tmp/tmp-inst/`,
+  which persists across reboots per FHS.
 
-`root` and `adm` are excluded so system and daemon logins keep the shared
-directories. The user's home directory is deliberately not polyinstantiated -
-that would hide the user's own data and only makes sense on SELinux MLS
-systems. Because a fresh `/tmp` has no X11/ICE socket directories, an instance
+The user's home directory is deliberately not polyinstantiated - that would
+hide the user's own data and only makes sense on SELinux MLS systems. Because a
+freshly created `/tmp` instance has no X11/ICE socket directories, an instance
 init script recreates `/tmp/.X11-unix` and `/tmp/.ICE-unix` mode `1777`.
 
 See:
@@ -805,6 +805,7 @@ See:
 - `/etc/security/namespace.d/30_security-misc.conf`
 - `/usr/libexec/security-misc/pam-namespace-init`
 - `/usr/lib/tmpfiles.d/30_security-misc-polyinstantiation.conf`
+- `/usr/lib/systemd/system/run-security\x2dmisc.mount`
 - https://www.kicksecure.com/wiki/Dev/Strong_Linux_User_Account_Isolation
 
 ### SUID / SGID removal and permission hardening
