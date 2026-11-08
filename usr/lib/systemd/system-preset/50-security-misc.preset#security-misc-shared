@@ -11,10 +11,6 @@ disable permission-hardener.service
 ## https://github.com/Kicksecure/security-misc/pull/152
 disable remount-secure.service
 
-## New mount-time mechanism (replaces remount-secure). Disabled until e2e
-## validated on a VM, then enabled by default.
-disable secure-mount.service
-
 ## Disable due to pkexec issues.
 disable proc-hidepid.service
 

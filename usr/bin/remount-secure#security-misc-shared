@@ -39,6 +39,7 @@ set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
+export LC_ALL=C
 
 init() {
    if test -o xtrace ; then
@@ -216,9 +217,11 @@ remount_secure() {
       "${output_command[@]}" "INFO: Executing: mount --make-private --options remount,${intended_mount_options} ${mount_folder}"
       mount --make-private --options "remount,${intended_mount_options}" "${mount_folder}" || exit_code=100
    else
-      "${output_command[@]}" "INFO: '${mount_folder}' not yet mounted, therefore using mount bind."
-      "${output_command[@]}" "INFO: Executing: mount --make-private --options ${intended_mount_options} --bind ${mount_folder} ${mount_folder}"
-      mount --make-private --options "${intended_mount_options}" --bind "${mount_folder}" "${mount_folder}" || exit_code=101
+      "${output_command[@]}" "INFO: '${mount_folder}' not yet mounted, therefore using recursive mount bind."
+      "${output_command[@]}" "INFO: Executing: mount --make-private --options ${intended_mount_options} --rbind ${mount_folder} ${mount_folder}"
+      ## rbind (recursive) rather than bind: a plain bind of a directory hides any
+      ## submounts underneath it. Each submount is hardened by its own policy entry.
+      mount --make-private --options "${intended_mount_options}" --rbind "${mount_folder}" "${mount_folder}" || exit_code=101
    fi
 
    new_mount_options="$(findmnt --noheadings --output options -- "${mount_folder}")" || true
@@ -284,6 +287,12 @@ _var_tmp() {
 _var_log() {
    mount_folder="${NEWROOT}/var/log"
    intended_mount_options="nosuid,nodev,noexec"
+   remount_secure
+}
+
+_var_cache() {
+   mount_folder="${NEWROOT}/var/cache"
+   intended_mount_options="nosuid,nodev${most_noexec_maybe}"
    remount_secure
 }
 
@@ -365,8 +374,51 @@ end() {
    exit "${exit_code}"
 }
 
+level_arg_present() {
+   ## True if an explicit numeric level (0, 1, 2 or 3) is among the arguments.
+   local arg
+   for arg in "$@" ; do
+      case "${arg}" in
+         0|1|2|3)
+            return 0
+            ;;
+      esac
+   done
+   return 1
+}
+
+cmdline_level() {
+   ## Honor the remountsecure= kernel parameter so the levels documented in
+   ## /etc/default/grub.d/40_remount_secure.cfg take effect. Last occurrence
+   ## wins (as dracut getarg). Falls back to /proc/1/cmdline where /proc/cmdline
+   ## is absent (containers). Only 0..3 are accepted; defaults to 3 (high).
+   local level cmdline tokens token
+   level=3
+   cmdline=""
+   if [ -r /proc/cmdline ]; then
+      read -r cmdline < /proc/cmdline || true
+   elif [ -r /proc/1/cmdline ]; then
+      cmdline="$(tr '\0' ' ' < /proc/1/cmdline)" || true
+   fi
+   tokens=()
+   read -r -a tokens <<< "${cmdline}" || true
+   for token in "${tokens[@]}" ; do
+      case "${token}" in
+         remountsecure=0|remountsecure=1|remountsecure=2|remountsecure=3)
+            level="${token#remountsecure=}"
+            ;;
+      esac
+   done
+   printf '%s' "${level}"
+}
+
 main() {
    init
+   ## An explicit numeric argument (dracut, manual use) wins. Otherwise honor
+   ## remountsecure= from the kernel command line (default level 3).
+   if ! level_arg_present "$@" ; then
+      set -- "$(cmdline_level)" "$@"
+   fi
    parse_options "$@"
    preparation
 
@@ -378,6 +430,7 @@ main() {
    _tmp
    _var_tmp
    _var_log
+   _var_cache
    _var
    _usr
    _home
