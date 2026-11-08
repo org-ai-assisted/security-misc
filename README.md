@@ -799,6 +799,17 @@ hide the user's own data and only makes sense on SELinux MLS systems. Because a
 freshly created `/tmp` instance has no X11/ICE socket directories, an instance
 init script recreates `/tmp/.X11-unix` and `/tmp/.ICE-unix` mode `1777`.
 
+Activation and reboot: on a freshly built image the feature activates on first
+boot (the mount unit is ordered before `systemd-tmpfiles-setup`, which creates
+the instance-parent directories, both before any user session). When the package
+is instead installed or upgraded on an already-running system, the `postinst`
+mounts the backing tmpfs and creates the instance-parents immediately, so new
+logins are never denied by the just-woven (`required`) module. A reboot is still
+recommended after such an install, because `pam_namespace` only applies to *new*
+sessions: any session already open - including the running `systemd --user`
+manager - keeps its pre-existing view of `/tmp`, `/var/tmp`, and `/dev/shm`
+until it is restarted or the system is rebooted.
+
 See:
 
 - `/usr/share/pam-configs/namespace-security-misc`
