@@ -379,6 +379,9 @@ level_arg_present() {
    local arg
    for arg in "$@" ; do
       case "${arg}" in
+         --)
+            break
+            ;;
          0|1|2|3)
             return 0
             ;;
@@ -392,7 +395,7 @@ cmdline_level() {
    ## /etc/default/grub.d/40_remount_secure.cfg take effect. Last occurrence
    ## wins (as dracut getarg). Falls back to /proc/1/cmdline where /proc/cmdline
    ## is absent (containers). Only 0..3 are accepted; defaults to 3 (high).
-   local level cmdline tokens token
+   local level cmdline tokens token value
    level=3
    cmdline=""
    if [ -r /proc/cmdline ]; then
@@ -404,8 +407,17 @@ cmdline_level() {
    read -r -a tokens <<< "${cmdline}" || true
    for token in "${tokens[@]}" ; do
       case "${token}" in
-         remountsecure=0|remountsecure=1|remountsecure=2|remountsecure=3)
-            level="${token#remountsecure=}"
+         remountsecure=*)
+            value="${token#remountsecure=}"
+            case "${value}" in
+               0|1|2|3)
+                  level="${value}"
+                  ;;
+               *)
+                  ## An invalid last assignment fails safe to the highest level.
+                  level=3
+                  ;;
+            esac
             ;;
       esac
    done
