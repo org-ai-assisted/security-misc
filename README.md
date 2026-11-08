@@ -772,12 +772,24 @@ is bypassed by any program that hardcodes `/tmp`. `libpam-tmpdir` is kept as
 complementary defense in depth: `pam_namespace` is ordered before it, so
 `$TMPDIR` is set inside the already-private `/tmp`.
 
+Polyinstantiation is applied to interactive login sessions only (the
+`pam-auth-update` profile is `Session-Interactive-Only`). Upstream considers
+`pam_namespace` unsuitable for the shared stack that `su`/`sudo`/`runuser`
+include - systemd commit `0ef48896` (which adds the `systemd --user` call)
+states: "Both calls are not suitable for inclusion in the shared part of the
+stack (e.g. @system-auth on Fedora/RHEL systems), because for example
+su/sudo/runuser should not include them." A consequence is that `systemd --user`
+services and cron jobs use the global temporary directories, not a private
+instance.
+
 Methods per directory:
 
 - `/tmp` and `/dev/shm` use the `tmpfs` method: a fresh, empty, RAM-backed
-  instance per session, mounted `nosuid,nodev` (keeps `/tmp` RAM-only for
-  anti-forensics; `noexec` is intentionally not set, because some programs
-  legitimately execute from `/tmp`).
+  instance per session, mounted `nosuid,nodev,noexec`. These mount options
+  mirror the system's global mount-hardening policy; because a boot-time global
+  remount cannot reach a mount created later inside the session's private
+  namespace, `pam_namespace` is the only enforcement point for these per-session
+  instances, so it applies the same policy rather than omitting it.
 - `/var/tmp` uses the `user` method: a per-account on-disk instance under
   `/var/tmp/tmp-inst/`, which persists across reboots per FHS.
 

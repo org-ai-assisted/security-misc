@@ -21,8 +21,14 @@
 ##
 ## Rationale per directory:
 ##   /tmp     tmpfs - keep it RAM-only (anti-forensics); nothing in /tmp is
-##            meant to survive a session. noexec is intentionally NOT set,
-##            because some programs legitimately execute from /tmp.
+##            meant to survive a session.
+##
+## mntopts (nosuid,nodev,noexec) mirror the system's global mount-hardening
+## policy for /tmp and /dev/shm. pam_namespace is the ONLY enforcement point
+## that reaches these per-session tmpfs instances: a boot-time global remount
+## cannot touch a mount created later inside the session's private namespace,
+## so the policy must be applied here too or the per-user /tmp and /dev/shm
+## silently lose the hardening the global mounts have.
 ##   /var/tmp user  - FHS: persists across reboots; per-account on-disk instance.
 ##   /dev/shm tmpfs - RAM-only POSIX shared memory; fresh per session.
 ##
@@ -39,6 +45,6 @@
 ## https://www.kicksecure.com/wiki/Dev/Strong_Linux_User_Account_Isolation
 ## man namespace.conf
 
-/tmp       /tmp-inst/          tmpfs:mntopts=nosuid,nodev:iscript=/usr/libexec/security-misc/pam-namespace-init   root,adm
+/tmp       /tmp-inst/          tmpfs:mntopts=nosuid,nodev,noexec:iscript=/usr/libexec/security-misc/pam-namespace-init   root,adm
 /var/tmp   /var/tmp/tmp-inst/  user   root,adm
-/dev/shm   /dev/shm-inst/      tmpfs:mntopts=nosuid,nodev   root,adm
+/dev/shm   /dev/shm-inst/      tmpfs:mntopts=nosuid,nodev,noexec   root,adm
