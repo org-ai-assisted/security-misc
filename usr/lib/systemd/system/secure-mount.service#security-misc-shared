@@ -1,0 +1,21 @@
+## Copyright (C) 2019 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+[Unit]
+Description=Apply secure mount options to data directories
+Documentation=https://www.kicksecure.com/wiki/Noexec
+
+## Runs between local-fs.target (all fstab mounts present) and sysinit.target,
+## so hardening is in place before sysinit services start.
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target
+Requires=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/secure-mount
+
+[Install]
+WantedBy=sysinit.target

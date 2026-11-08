@@ -1,0 +1,41 @@
+## Copyright (C) 2019 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Secure mount options policy. Read by /usr/bin/secure-mount.
+##
+## Format: "<directory> <comma-separated-options>", one per line, '#' comments.
+## Order matters: a parent directory must precede its children, so that the
+## parent's recursive self-bind does not hide an already-hardened child.
+##
+## To OVERRIDE, drop a file in /etc/secure-mount.d/*.conf (it wins over this one):
+##   - opt OUT of noexec on /home:   /home nosuid,nodev
+##   - opt IN  to noexec on /boot:   /boot nosuid,nodev,noexec
+##   - disable hardening for a dir:  /home            (empty options)
+##
+## API filesystems (/proc, /sys, /dev, /dev/pts, /run) are intentionally left to
+## systemd's own defaults and are NOT listed here.
+
+## noexec by default: user-writable data directories.
+/home nosuid,nodev,noexec
+/root nosuid,nodev,noexec
+/tmp nosuid,nodev,noexec
+/dev/shm nosuid,nodev,noexec
+/srv nosuid,nodev,noexec
+/media nosuid,nodev,noexec
+/mnt nosuid,nodev,noexec
+
+## /var: nosuid,nodev only. noexec is NOT possible: dpkg executes maintainer
+## scripts from /var/lib/dpkg/info, so noexec on /var breaks package management.
+/var nosuid,nodev
+
+## noexec opt-in: shipped nosuid,nodev; add ",noexec" in /etc to enable.
+/var/tmp nosuid,nodev
+/var/log nosuid,nodev
+/var/cache nosuid,nodev
+/boot nosuid,nodev
+/boot/efi nosuid,nodev
+
+## Keep exec (and, for /usr, suid): these legitimately hold executables.
+/usr nodev
+/opt nosuid,nodev
+/etc nosuid,nodev

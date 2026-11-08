@@ -1,0 +1,137 @@
+#!/bin/bash
+
+## Copyright (C) 2019 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Secure mount options.
+##
+## Apply nosuid,nodev and (per policy) noexec to configured directories at the
+## mount level, early during boot, before services start.
+##
+## - Policy is read from drop-in files:
+##     /usr/lib/secure-mount.d/*.conf   (shipped defaults)
+##     /etc/secure-mount.d/*.conf       (administrator overrides, win)
+##   Each non-comment line: "<dir> <comma-separated-options>".
+##   A later file (by sorted basename across both directories, /etc after /usr)
+##   overrides an earlier entry for the same directory. An empty options field
+##   ("<dir>") disables hardening for that directory (opt-out).
+## - A directory that is not already its own mount point is recursively
+##   self-bound (rbind, which preserves any submounts) before the options are
+##   applied. A plain bind would hide existing submounts, so rbind is required.
+## - Idempotent: re-running is a no-op once the options are present.
+##
+## https://www.kicksecure.com/wiki/Noexec
+## https://www.kicksecure.com/wiki/Dev/remount-secure
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+export LC_ALL=C
+
+policy_usr_dir="/usr/lib/secure-mount.d"
+policy_etc_dir="/etc/secure-mount.d"
+
+log() {
+   printf '%s\n' "secure-mount: $*"
+}
+
+require_root() {
+   if [ "$(id -u)" != "0" ]; then
+      log "ERROR: must be run as root."
+      exit 1
+   fi
+}
+
+## Collect policy into two parallel ordered arrays: policy_dir[] and policy_opts[].
+## Last assignment per directory wins; /usr drop-ins first, then /etc.
+read_policy() {
+   local file line dir opts idx found
+   policy_dir=()
+   policy_opts=()
+   for file in "${policy_usr_dir}"/*.conf "${policy_etc_dir}"/*.conf ; do
+      [ -r "${file}" ] || continue
+      while IFS= read -r line || [ -n "${line}" ]; do
+         ## strip comments and surrounding whitespace
+         line="${line%%#*}"
+         line="${line#"${line%%[![:space:]]*}"}"
+         line="${line%"${line##*[![:space:]]}"}"
+         [ -n "${line}" ] || continue
+         dir="${line%%[[:space:]]*}"
+         opts="${line#"${dir}"}"
+         opts="${opts#"${opts%%[![:space:]]*}"}"
+         ## upsert
+         found=""
+         for idx in "${!policy_dir[@]}"; do
+            if [ "${policy_dir[idx]}" = "${dir}" ]; then
+               policy_opts[idx]="${opts}"
+               found=1
+               break
+            fi
+         done
+         if [ -z "${found}" ]; then
+            policy_dir+=( "${dir}" )
+            policy_opts+=( "${opts}" )
+         fi
+      done < "${file}"
+   done
+}
+
+## secure_mount_apply <dir> <options>
+secure_mount_apply() {
+   local dir="$1" options="$2" target current o missing
+   if [ -z "${options}" ]; then
+      log "opt-out (no options configured): ${dir}"
+      return 0
+   fi
+   if [ ! -d "${dir}" ]; then
+      log "skip (no directory): ${dir}"
+      return 0
+   fi
+   target="$(findmnt --noheadings --output TARGET --target "${dir}" 2>/dev/null || true)"
+   if [ "${target}" = "${dir}" ]; then
+      current="$(findmnt --noheadings --output OPTIONS --target "${dir}" 2>/dev/null || true)"
+      missing=0
+      local want
+      IFS=',' read -r -a want <<< "${options}"
+      for o in "${want[@]}"; do
+         case ",${current}," in
+            *",${o},"*)
+               continue
+               ;;
+         esac
+         missing=1
+      done
+      if [ "${missing}" = 0 ]; then
+         log "already hardened: ${dir} (${current})"
+         return 0
+      fi
+      mount -o "remount,${options}" "${dir}"
+   else
+      mount --rbind "${dir}" "${dir}"
+      mount -o "remount,bind,${options}" "${dir}"
+   fi
+   log "${dir} -> $(findmnt --noheadings --output OPTIONS --target "${dir}" 2>/dev/null || true)"
+}
+
+main() {
+   require_root
+   log "START"
+   read_policy
+   if [ "${#policy_dir[@]}" = 0 ]; then
+      log "no policy found under ${policy_usr_dir} or ${policy_etc_dir}"
+      log "END"
+      return 0
+   fi
+   local idx
+   ## Apply in policy order. Drop-ins are authored parent-before-child so that a
+   ## parent's rbind does not later hide an already-hardened child.
+   for idx in "${!policy_dir[@]}"; do
+      secure_mount_apply "${policy_dir[idx]}" "${policy_opts[idx]}"
+   done
+   log "END"
+}
+
+main "$@"
