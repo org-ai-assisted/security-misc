@@ -759,6 +759,42 @@ See:
 
 - `/usr/share/pam-configs/umask-security-misc`
 
+#### Polyinstantiated temporary directories
+
+The shared, world-writable temporary directories `/tmp`, `/var/tmp`, and
+`/dev/shm` are polyinstantiated per account using the PAM module
+`pam_namespace`, so one account cannot see, read, race, or predict another
+account's temporary files. Each login session receives a private mount of
+these directories in its own mount namespace.
+
+This is stronger than `libpam-tmpdir`, which only sets `$TMPDIR` / `$TMP` and
+is bypassed by any program that hardcodes `/tmp`. `libpam-tmpdir` is kept as
+complementary defense in depth: `pam_namespace` is ordered before it, so
+`$TMPDIR` is set inside the already-private `/tmp`.
+
+Methods per directory:
+
+- `/tmp` and `/dev/shm` use the `tmpfs` method: a fresh, empty, RAM-backed
+  instance per session, mounted `nosuid,nodev` (keeps `/tmp` RAM-only for
+  anti-forensics; `noexec` is intentionally not set, because some programs
+  legitimately execute from `/tmp`).
+- `/var/tmp` uses the `user` method: a per-account on-disk instance under
+  `/var/tmp/tmp-inst/`, which persists across reboots per FHS.
+
+`root` and `adm` are excluded so system and daemon logins keep the shared
+directories. The user's home directory is deliberately not polyinstantiated -
+that would hide the user's own data and only makes sense on SELinux MLS
+systems. Because a fresh `/tmp` has no X11/ICE socket directories, an instance
+init script recreates `/tmp/.X11-unix` and `/tmp/.ICE-unix` mode `1777`.
+
+See:
+
+- `/usr/share/pam-configs/namespace-security-misc`
+- `/etc/security/namespace.d/30_security-misc.conf`
+- `/usr/libexec/security-misc/pam-namespace-init`
+- `/usr/lib/tmpfiles.d/30_security-misc-polyinstantiation.conf`
+- https://www.kicksecure.com/wiki/Dev/Strong_Linux_User_Account_Isolation
+
 ### SUID / SGID removal and permission hardening
 
 #### SUID / SGID removal

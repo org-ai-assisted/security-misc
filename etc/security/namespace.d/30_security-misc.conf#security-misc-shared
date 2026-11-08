@@ -1,0 +1,44 @@
+## Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Per-account polyinstantiation of shared, world-writable temporary
+## directories using pam_namespace. Drop-in; parsed after the libpam-modules
+## default /etc/security/namespace.conf.
+##
+## Goal: a user must not see, read, race, or predict another account's temp
+## files in /tmp, /var/tmp, /dev/shm. libpam-tmpdir only sets $TMPDIR and is
+## bypassed by any program that hardcodes /tmp - pam_namespace gives a real
+## private mount, so hardcoded /tmp is isolated too.
+##
+## Columns: polydir  instance_prefix  method[:flags]  excluded_users
+##   - method 'user'  -> one instance per account, shared across that account's
+##                       sessions, persists (on-disk backing).
+##   - method 'tmpfs' -> a fresh empty RAM-backed instance per session; mntopts
+##                       hardens the mount independently of remount-secure.
+##   - excluded users 'root,adm' keep the shared dirs for system/daemon logins.
+##
+## Rationale per directory:
+##   /tmp     tmpfs - keep it RAM-only (anti-forensics); nothing in /tmp is
+##            meant to survive a session. noexec is intentionally NOT set,
+##            because some programs legitimately execute from /tmp.
+##   /var/tmp user  - FHS: persists across reboots; per-account on-disk instance.
+##   /dev/shm tmpfs - RAM-only POSIX shared memory; fresh per session.
+##
+## iscript on /tmp recreates the X11/ICE socket dirs inside the fresh instance
+## (see pam-namespace-init). $HOME is deliberately NOT polyinstantiated - that
+## would hide the user's own data and only makes sense on SELinux MLS systems.
+##
+## The instance_prefix field is mandatory but is UNUSED by the tmpfs method
+## (it mounts a fresh filesystem, not a dir under the prefix); the /tmp-inst/
+## and /dev/shm-inst/ values below are placeholders and no such dir is created.
+## Only the user-method /var/tmp has a real instance parent (/var/tmp/tmp-inst,
+## created 0000 root:root via tmpfiles.d 30_security-misc-polyinstantiation).
+##
+## https://www.kicksecure.com/wiki/Dev/Strong_Linux_User_Account_Isolation
+## man namespace.conf
+
+/tmp       /tmp-inst/          tmpfs:mntopts=nosuid,nodev:iscript=/usr/libexec/security-misc/pam-namespace-init   root,adm
+/var/tmp   /var/tmp/tmp-inst/  user   root,adm
+/dev/shm   /dev/shm-inst/      tmpfs:mntopts=nosuid,nodev   root,adm

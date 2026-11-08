@@ -1,0 +1,21 @@
+## Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Instance-parent directory for the pam_namespace 'user'-method polydir
+## /var/tmp (/etc/security/namespace.d/30_security-misc.conf).
+##
+## pam_namespace requires the instance_prefix parent to pre-exist, owned
+## root:root, mode 0000 (the restrictive mode is the isolation guarantee; a
+## laxer mode would let one account reach another's instance). Shipping it via
+## tmpfiles.d (not postinst) makes it self-healing: recreated at every boot
+## with the enforced mode, surviving reboots and systemd-tmpfiles age cleanup.
+## Age argument '-' means never auto-clean the per-account instances inside.
+##
+## The /tmp and /dev/shm lines use the 'tmpfs' method, which mounts a fresh
+## empty filesystem and does NOT use an instance-parent dir (verified), so
+## none is created for them.
+##
+## man tmpfiles.d
+d /var/tmp/tmp-inst  0000 root root -
