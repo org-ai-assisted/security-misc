@@ -1,30 +1,44 @@
 {
-  "bomFormat": "CycloneDX",
-  "specVersion": "1.6",
+  "components": [
+    {
+      "bom-ref": "pkg:deb/debian/security-misc-shared",
+      "name": "security-misc-shared",
+      "purl": "pkg:deb/debian/security-misc-shared",
+      "type": "library"
+    }
+  ],
+  "dependencies": [
+    {
+      "dependsOn": [
+        "pkg:deb/debian/security-misc-shared"
+      ],
+      "ref": "pkg:deb/debian/security-misc-desktop@3:54.2-1"
+    },
+    {
+      "ref": "pkg:deb/debian/security-misc-shared"
+    }
+  ],
   "metadata": {
     "component": {
-      "type": "application",
+      "bom-ref": "pkg:deb/debian/security-misc-desktop@3:54.2-1",
       "name": "security-misc-desktop",
-      "version": "3:54.2-1",
-      "purl": "pkg:deb/debian/security-misc-desktop@3%3A54.2-1"
+      "purl": "pkg:deb/debian/security-misc-desktop@3:54.2-1",
+      "type": "application",
+      "version": "3:54.2-1"
     },
     "properties": [
       {
-        "name": "kicksecure:sbom:tier",
-        "value": "declared-floor"
-      },
-      {
         "name": "kicksecure:sbom:source",
         "value": "debian/control top-level dependencies (Pre-Depends, Depends)"
+      },
+      {
+        "name": "kicksecure:sbom:tier",
+        "value": "declared-floor"
       }
     ]
   },
-  "components": [
-    {
-      "type": "library",
-      "name": "security-misc-shared",
-      "scope": "required",
-      "purl": "pkg:deb/debian/security-misc-shared"
-    }
-  ]
+  "version": 1,
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6"
 }
