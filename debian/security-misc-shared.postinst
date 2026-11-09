@@ -150,18 +150,16 @@ activate_pam_namespace_backing() {
     return 0
   fi
 
-  ## Make the freshly installed mount unit known to systemd.
-  systemctl daemon-reload || true
-
-  ## Direct 'systemctl start' (NOT invoke-rc.d) so Kicksecure's policy-rc.d does
-  ## not defer it: this is a login precondition, not a background daemon. Unit
-  ## name is the systemd-escaped form of /run/pam-namespace.
+  ## Mount the dedicated hardened tmpfs directly, NOT via systemctl: lintian
+  ## discourages systemctl in maintscripts, and policy-rc.d would defer a unit
+  ## start anyway. The options MUST match run-pam\x2dnamespace.mount (the
+  ## boot-time source of truth); at the next boot that unit mounts it instead.
   if ! mountpoint -q /run/pam-namespace ; then
-    systemctl start 'run-pam\x2dnamespace.mount' || true
+    mount -t tmpfs -o nosuid,nodev,noexec,mode=0755,size=50% tmpfs /run/pam-namespace || true
   fi
 
-  ## Create the 0000 instance-parents on the now-mounted tmpfs (/tmp, /dev/shm)
-  ## and the on-disk /var/tmp parent that pam_namespace requires to pre-exist.
+  ## Create the 0000 instance-parents (/tmp, /dev/shm on the tmpfs; /var/tmp on
+  ## disk) that pam_namespace requires to pre-exist.
   systemd-tmpfiles --create /usr/lib/tmpfiles.d/30_security-misc-polyinstantiation.conf || true
 }
 
