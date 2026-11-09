@@ -99,9 +99,14 @@ vm.unprivileged_userfaultfd=0
 ## bit cannot be set with chmod.
 ## This is a bar-raiser, NOT write-xor-execute. Verified on Linux 6.12: an
 ## executable mapping of such a memfd is still obtainable via mmap(PROT_EXEC) or
-## mprotect, and the execute bit can still be added through a POSIX ACL (setfacl)
-## and the fd then exec'd. Full W^X needs an LSM (for example SELinux execmem),
-## not this sysctl alone.
+## mprotect. That is by design: Linux has no system-wide W^X knob, so closing the
+## executable-memory vector needs an LSM (for example SELinux execmem) or
+## per-service seccomp (systemd MemoryDenyWriteExecute=), not this sysctl alone.
+## A second path -- adding the execute bit through a POSIX ACL (setfacl), which
+## F_SEAL_EXEC failed to cover -- was a kernel seal-coverage bug, fixed in Linux
+## 6.18 by commit 0237c47ca170 ("mm/shmem: honour F_SEAL_EXEC when an ACL is
+## set", Cc: stable). It stays exploitable until that fix reaches the running
+## kernel.
 ## Side effect: at value 1 and 2 a default memfd is created sealable
 ## (MFD_ALLOW_SEALING is implied), so a peer holding the fd can add write or
 ## shrink seals that a value 0 default memfd would refuse.
