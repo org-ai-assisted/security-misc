@@ -252,9 +252,10 @@ true "INFO: debhelper beginning here."
 
 true "INFO: Done with debhelper."
 
-## After #DEBHELPER# (unit known to systemd): close the install-to-reboot window
-## in which pam_namespace is woven 'required' but its backing tmpfs and
-## instance-parents do not yet exist. No-op in an image-build chroot.
+## After the debhelper-generated section (the mount unit is now known to
+## systemd): close the install-to-reboot window in which pam_namespace is woven
+## 'required' but its backing tmpfs and instance-parents do not yet exist. No-op
+## in an image-build chroot.
 if [ "$1" = "configure" ]; then
     activate_pam_namespace_backing
 fi
