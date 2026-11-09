@@ -1,4 +1,6 @@
 {
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
   "components": [
     {
       "bom-ref": "pkg:deb/debian/security-misc-shared",
@@ -37,8 +39,6 @@
       }
     ]
   },
-  "version": 1,
-  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
-  "bomFormat": "CycloneDX",
-  "specVersion": "1.6"
+  "specVersion": "1.6",
+  "version": 1
 }
