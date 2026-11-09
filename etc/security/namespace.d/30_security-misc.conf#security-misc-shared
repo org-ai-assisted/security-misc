@@ -26,7 +26,9 @@
 ##     (the 'user' method cannot set mntopts itself, unlike 'tmpfs'). noexec
 ##     mirrors the system's global mount-hardening policy for /tmp and /dev/shm.
 ##   - /var/tmp uses an on-disk per-account instance (FHS: persists at reboot).
-##   - root and adm are excluded so system/daemon logins keep the shared dirs.
+##   - root is excluded so system/daemon logins keep the shared dirs. Only
+##     accounts that EXIST may be listed here: pam_namespace logs "Unknown user
+##     <name> in configuration" per session otherwise (Debian has no 'adm' user).
 ##
 ## iscript on /tmp recreates the X11/ICE socket dirs inside a freshly created
 ## instance (see pam-namespace-init). $HOME is deliberately NOT polyinstantiated
@@ -35,6 +37,6 @@
 ## https://www.kicksecure.com/wiki/Dev/Strong_Linux_User_Account_Isolation
 ## man namespace.conf
 
-/tmp       /run/pam-namespace/tmp-inst/   user:iscript=/usr/libexec/security-misc/pam-namespace-init   root,adm
-/var/tmp   /var/tmp/tmp-inst/             user   root,adm
-/dev/shm   /run/pam-namespace/shm-inst/   user   root,adm
+/tmp       /run/pam-namespace/tmp-inst/   user:iscript=/usr/libexec/security-misc/pam-namespace-init   root
+/var/tmp   /var/tmp/tmp-inst/             user   root
+/dev/shm   /run/pam-namespace/shm-inst/   user   root

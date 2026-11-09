@@ -777,9 +777,18 @@ non-interactive stack (`common-session-noninteractive`), so the `systemd --user`
 manager and cron jobs see the same instance as the interactive login session -
 otherwise, since `systemd --user` runs in its own mount namespace, its services'
 temporary files would land in the global directories (systemd commit `0ef48896`
-documents that `systemd --user` needs its own `pam_namespace` call). `root` and
-`adm` are excluded, so `su`/`sudo` to root is a no-op; the module carries
+documents that `systemd --user` needs its own `pam_namespace` call). `root` is
+excluded, so `su`/`sudo` to root is a no-op; the module carries
 `unmnt_remnt` so `su` to another account re-binds cleanly instead of nesting.
+
+Because `common-session-noninteractive` is also pulled in by daemon helpers that
+open a user PAM session (`privleapd`, `polkit-1`, `sudo`), the pam-config gates
+`pam_namespace` behind `pam_namespace_only_if_login`: it runs only for the
+services that must share one per-account instance (`login greetd sshd su su-l
+systemd-user cron atd`) and is skipped for everything else, so daemon sessions
+stay on the shared directories and never needlessly (un)mount an instance. A
+login service not in that list gets no polyinstantiation; Kicksecure ships
+`greetd`, so a different display manager would need its service name added.
 
 Backing store per directory:
 
@@ -1089,10 +1098,12 @@ See: `/usr/lib/systemd/system-preset/50-security-misc.preset`
   activates inside VirtualBox VMs.
   `/usr/lib/systemd/system/kill-vboxdrmclient-on-shutdown.service`
 
-- PAM conditional helpers (`pam_only_if_login`, `pam_only_if_su`) allow
-  specific PAM rules to apply only to certain services.
+- PAM conditional helpers (`pam_only_if_login`, `pam_only_if_su`,
+  `pam_namespace_only_if_login`) allow specific PAM rules to apply only to
+  certain services.
   `/usr/libexec/security-misc/pam_only_if_login`
   `/usr/libexec/security-misc/pam_only_if_su`
+  `/usr/libexec/security-misc/pam_namespace_only_if_login`
 
 - Unsafe logins (such as logging into non-sysmaint accounts while booted in
   sysmaint mode, or elevating privileges from an unprivileged account to a

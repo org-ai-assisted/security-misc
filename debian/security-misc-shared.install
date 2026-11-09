@@ -129,6 +129,7 @@ usr/libexec/security-misc/pam-namespace-init#security-misc-shared => /usr/libexe
 usr/libexec/security-misc/pam_faillock_not_if_x#security-misc-shared => /usr/libexec/security-misc/pam_faillock_not_if_x
 usr/libexec/security-misc/pam_only_if_login#security-misc-shared => /usr/libexec/security-misc/pam_only_if_login
 usr/libexec/security-misc/pam_only_if_su#security-misc-shared => /usr/libexec/security-misc/pam_only_if_su
+usr/libexec/security-misc/pam_namespace_only_if_login#security-misc-shared => /usr/libexec/security-misc/pam_namespace_only_if_login
 usr/libexec/security-misc/panic-on-oops#security-misc-shared => /usr/libexec/security-misc/panic-on-oops
 usr/libexec/security-misc/permission-lockdown#security-misc-shared => /usr/libexec/security-misc/permission-lockdown
 usr/libexec/security-misc/remove-system.map#security-misc-shared => /usr/libexec/security-misc/remove-system.map
