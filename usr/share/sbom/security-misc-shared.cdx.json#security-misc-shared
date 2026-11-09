@@ -1,0 +1,120 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "security-misc-shared",
+      "version": "3:54.2-1",
+      "purl": "pkg:deb/debian/security-misc-shared@3:54.2-1"
+    },
+    "properties": [
+      {
+        "name": "kicksecure:sbom:tier",
+        "value": "declared-floor"
+      },
+      {
+        "name": "kicksecure:sbom:source",
+        "value": "debian/control top-level dependencies (Pre-Depends, Depends)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "adduser",
+      "scope": "required",
+      "purl": "pkg:deb/debian/adduser"
+    },
+    {
+      "type": "library",
+      "name": "apparmor-profile-dist",
+      "scope": "required",
+      "purl": "pkg:deb/debian/apparmor-profile-dist"
+    },
+    {
+      "type": "library",
+      "name": "build-essential",
+      "scope": "required",
+      "purl": "pkg:deb/debian/build-essential"
+    },
+    {
+      "type": "library",
+      "name": "dmsetup",
+      "scope": "required",
+      "purl": "pkg:deb/debian/dmsetup"
+    },
+    {
+      "type": "library",
+      "name": "helper-scripts",
+      "scope": "required",
+      "purl": "pkg:deb/debian/helper-scripts"
+    },
+    {
+      "type": "library",
+      "name": "libcap2-bin",
+      "scope": "required",
+      "purl": "pkg:deb/debian/libcap2-bin"
+    },
+    {
+      "type": "library",
+      "name": "libdbus-1-dev",
+      "scope": "required",
+      "purl": "pkg:deb/debian/libdbus-1-dev"
+    },
+    {
+      "type": "library",
+      "name": "libglib2.0-bin",
+      "scope": "required",
+      "purl": "pkg:deb/debian/libglib2.0-bin"
+    },
+    {
+      "type": "library",
+      "name": "libpam-modules-bin",
+      "scope": "required",
+      "purl": "pkg:deb/debian/libpam-modules-bin"
+    },
+    {
+      "type": "library",
+      "name": "libpam-runtime",
+      "scope": "required",
+      "purl": "pkg:deb/debian/libpam-runtime"
+    },
+    {
+      "type": "library",
+      "name": "libpam-umask",
+      "scope": "required",
+      "purl": "pkg:deb/debian/libpam-umask"
+    },
+    {
+      "type": "library",
+      "name": "libsystemd-dev",
+      "scope": "required",
+      "purl": "pkg:deb/debian/libsystemd-dev"
+    },
+    {
+      "type": "library",
+      "name": "memlockd",
+      "scope": "required",
+      "purl": "pkg:deb/debian/memlockd"
+    },
+    {
+      "type": "library",
+      "name": "pkgconf",
+      "scope": "required",
+      "purl": "pkg:deb/debian/pkgconf"
+    },
+    {
+      "type": "library",
+      "name": "python3",
+      "scope": "required",
+      "purl": "pkg:deb/debian/python3"
+    },
+    {
+      "type": "library",
+      "name": "secure-delete",
+      "scope": "required",
+      "purl": "pkg:deb/debian/secure-delete"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "security-misc-server",
+      "version": "3:54.2-1",
+      "purl": "pkg:deb/debian/security-misc-server@3:54.2-1"
+    },
+    "properties": [
+      {
+        "name": "kicksecure:sbom:tier",
+        "value": "declared-floor"
+      },
+      {
+        "name": "kicksecure:sbom:source",
+        "value": "debian/control top-level dependencies (Pre-Depends, Depends)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "security-misc-shared",
+      "scope": "required",
+      "purl": "pkg:deb/debian/security-misc-shared"
+    }
+  ]
+}
