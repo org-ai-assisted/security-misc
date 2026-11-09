@@ -778,8 +778,12 @@ manager and cron jobs see the same instance as the interactive login session -
 otherwise, since `systemd --user` runs in its own mount namespace, its services'
 temporary files would land in the global directories (systemd commit `0ef48896`
 documents that `systemd --user` needs its own `pam_namespace` call). `root` is
-excluded, so `su`/`sudo` to root is a no-op; the module carries
-`unmnt_remnt` so `su` to another account re-binds cleanly instead of nesting.
+excluded, so `su`/`sudo` to root is a no-op. The `unmnt_remnt` flag is
+deliberately not used: for the `user` method, `su` to another account stacks
+that account's instance in the session's own mount namespace (the top mount
+wins and is reclaimed on teardown), so nesting is harmless; `unmnt_remnt` would
+instead `umount` each polydir unconditionally, logging a benign `EINVAL` for
+the on-disk `/var/tmp` in daemon sessions where it is not a mountpoint.
 
 Backing store per directory:
 

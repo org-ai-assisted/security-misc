@@ -16,8 +16,12 @@
 ## PAM sessions - interactive login, the systemd --user manager, and cron - so
 ## they agree on /tmp and /dev/shm (no systemd --user split; background-service
 ## temp files are isolated too). This requires pam_namespace to run in the
-## non-interactive stack as well, so the pam-config is NOT interactive-only and
-## carries unmnt_remnt (see namespace-security-misc).
+## non-interactive stack as well, so the pam-config is NOT interactive-only (see
+## namespace-security-misc). No unmnt_remnt flag: for the 'user' method su
+## nesting stacks the new account's instance in the session's own mount
+## namespace (top mount wins, reclaimed on teardown), and unmnt_remnt would do
+## an unconditional umount of each polydir that logs a benign EINVAL for the
+## on-disk /var/tmp in daemon sessions (privleapd) where it is not a mountpoint.
 ##
 ## Columns: polydir  instance_prefix  method[:flags]  excluded_users
 ##   - /tmp, /dev/shm instances live on a dedicated nosuid,nodev,noexec tmpfs
