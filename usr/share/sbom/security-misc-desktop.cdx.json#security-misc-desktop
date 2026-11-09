@@ -6,7 +6,7 @@
       "type": "application",
       "name": "security-misc-desktop",
       "version": "3:54.2-1",
-      "purl": "pkg:deb/debian/security-misc-desktop@3:54.2-1"
+      "purl": "pkg:deb/debian/security-misc-desktop@3%3A54.2-1"
     },
     "properties": [
       {
