@@ -253,26 +253,31 @@ audit_mount_options() {
    ## option must be present; extra live options are fine). Report and count
    ## deviations; never remount, never consult or write the run-once markers.
    ##
-   ## --target resolves the path to its COVERING mount, so:
-   ## - a directory that is not itself a separate mountpoint is audited against
-   ##   the filesystem it actually lives on (a non-separate /home inherits / and
-   ##   must still satisfy the policy -- an exact-match lookup would skip it and
-   ##   pass a permissive parent silently), and
-   ## - only the single EFFECTIVE (topmost) mount is read, never a shadowed lower
-   ##   row whose options could falsely satisfy the policy.
+   ## findmnt --target reads the kernel mount table, which is what makes a
+   ## correct rootless audit possible:
+   ## - it resolves a path that is not itself a separate mountpoint to the
+   ##   covering mount (a non-separate /home inherits / and must still satisfy
+   ##   policy -- an exact-match lookup would skip it and pass a permissive
+   ##   parent silently),
+   ## - it works WITHOUT directory-traversal permission, so a rootless audit
+   ##   still sees /boot/efi even when /boot is mode 0700 (the hardened default);
+   ##   a plain 'test -d' would fail with EACCES there and wrongly skip it, and
+   ## - it lists stacked mounts in kernel order, so the EFFECTIVE (topmost) mount
+   ##   is the LAST row -- tail it; '--first-only' would read the wrong (shadowed)
+   ##   lower mount whose options could falsely satisfy policy.
+   ## Exit status: 0 = found; 1 = no mount for this path (absent -> N/A);
+   ## anything else (e.g. 127 when findmnt itself is missing) = cannot verify ->
+   ## fail CLOSED.
    local live_options intended_rest intended_option missing findmnt_rc
 
-   if ! test -d "${mount_folder}" ; then
-      "${output_command[@]}" "N/A: '${mount_folder}' folder exists: no"
+   findmnt_rc=0
+   live_options="$(findmnt --noheadings --output options --target "${mount_folder}" | tail -n 1)" || findmnt_rc=$?
+
+   if [ "${findmnt_rc}" = "1" ] ; then
+      "${output_command[@]}" "N/A: '${mount_folder}' no mount found"
       return 0
    fi
-
-   findmnt_rc=0
-   live_options="$(findmnt --noheadings --output options --target "${mount_folder}")" || findmnt_rc=$?
    if [ "${findmnt_rc}" != "0" ] || [ -z "${live_options}" ] ; then
-      ## An existing path always resolves to SOME mount, so an empty/failed
-      ## result means findmnt could not be read. Fail CLOSED: count it as a
-      ## deviation rather than silently passing an unverifiable mountpoint.
       "${output_command[@]}" "DEVIATION: '${mount_folder}' mount options unreadable (findmnt rc: '${findmnt_rc}')"
       deviation_count=$((deviation_count + 1))
       return 0
