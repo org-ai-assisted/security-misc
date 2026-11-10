@@ -50,16 +50,21 @@ init() {
 
    "${output_command[@]}" "$0: INFO: START"
 
-   ## dracut does not have id. Saving space in initial ramdisk.
-   if command -v id &>/dev/null ; then
-      if [ "$(id -u)" != "0" ]; then
-         "${output_command[@]}" "ERROR: must be run as root! sudo $0"
-         exit 1
+   ## --check audits mount options read-only: it never mounts and never writes
+   ## the run markers, so it needs neither root nor the /run state directory.
+   if [ "${option_check}" != "true" ]; then
+      ## dracut does not have id. Saving space in initial ramdisk.
+      if command -v id &>/dev/null ; then
+         if [ "$(id -u)" != "0" ]; then
+            "${output_command[@]}" "ERROR: must be run as root! sudo $0"
+            exit 1
+         fi
       fi
-   fi
 
-   mkdir --parents "/run/remount-secure"
+      mkdir --parents "/run/remount-secure"
+   fi
    exit_code=0
+   deviation_count=0
 
    ## dracut sets NEWROOT=/sysroot
    [[ -v NEWROOT ]] || NEWROOT=""
@@ -111,6 +116,12 @@ parse_options() {
                parsed=true
                shift
                ;;
+           --check)
+               "${output_command[@]}" "INFO: --check (audit only, no remount)"
+               option_check=true
+               parsed=true
+               shift
+               ;;
            --force)
                "${output_command[@]}" "INFO: --force"
                option_force=true
@@ -131,6 +142,7 @@ parse_options() {
    done
 
    [[ -v option_force ]] || option_force=""
+   [[ -v option_check ]] || option_check=false
    [[ -v parsed ]] || parsed=false
    [[ -v home_noexec_maybe ]] || home_noexec_maybe=""
    [[ -v most_noexec_maybe ]] || most_noexec_maybe=""
@@ -173,6 +185,11 @@ preparation() {
 }
 
 remount_secure() {
+   if [ "${option_check}" = "true" ]; then
+      audit_mount_options
+      return 0
+   fi
+
    "${output_command[@]}" ""
 
    ## ${FUNCNAME[1]} is the name of the calling function. I.e. the function
@@ -228,6 +245,54 @@ remount_secure() {
    "${output_command[@]}" "INFO: '${mount_folder}' new_mount_options: '${new_mount_options}'"
 
    touch "${status_file_full_path}"
+}
+
+audit_mount_options() {
+   ## Read-only verification for --check: compare the live mount options of
+   ## ${mount_folder} against ${intended_mount_options} as a SET (every intended
+   ## option must be present; extra live options are fine). Report and count
+   ## deviations; never remount, never consult or write the run-once markers.
+   local live_options intended_rest intended_option missing
+
+   if ! test -d "${mount_folder}" ; then
+      "${output_command[@]}" "N/A: '${mount_folder}' folder exists: no"
+      return 0
+   fi
+
+   live_options="$(findmnt --noheadings --output options -- "${mount_folder}")" || true
+   if [ -z "${live_options}" ] ; then
+      "${output_command[@]}" "N/A: '${mount_folder}' mounted: no"
+      return 0
+   fi
+
+   ## Set-membership test via case keeps intended tokens (our own hardcoded
+   ## nosuid/nodev/noexec/...) as literal patterns and avoids array-subscript
+   ## eval on the live option string (R-141).
+   missing=""
+   intended_rest="${intended_mount_options}"
+   while [ -n "${intended_rest}" ] ; do
+      intended_option="${intended_rest%%,*}"
+      case ",${live_options}," in
+         *",${intended_option},"*)
+            true "INFO: '${mount_folder}' has '${intended_option}'"
+            ;;
+         *)
+            missing="${missing:+"${missing},"}${intended_option}"
+            ;;
+      esac
+      if [ "${intended_rest}" = "${intended_option}" ] ; then
+         intended_rest=""
+      else
+         intended_rest="${intended_rest#*,}"
+      fi
+   done
+
+   if [ -n "${missing}" ] ; then
+      "${output_command[@]}" "DEVIATION: '${mount_folder}' missing '${missing}' (have: '${live_options}')"
+      deviation_count=$((deviation_count + 1))
+   else
+      "${output_command[@]}" "OK: '${mount_folder}' has intended mount options ('${intended_mount_options}')"
+   fi
 }
 
 _boot() {
@@ -368,6 +433,16 @@ end() {
    #"${output_command[@]}" "INFO: 'findmnt --list' output at the END."
    #"${output_command[@]}" "$(findmnt --list)"
 
+   if [ "${option_check}" = "true" ] ; then
+      ## Audit verdict is machine-readable via the exit code: nonzero iff any
+      ## mountpoint deviated from its intended options.
+      if [ "${deviation_count}" -gt 0 ] ; then
+         exit_code=1
+      else
+         exit_code=0
+      fi
+   fi
+
    "${output_command[@]}" ""
    "${output_command[@]}" "INFO: exit_code: ${exit_code}"
    "${output_command[@]}" "$0: INFO: END"
@@ -383,6 +458,23 @@ level_arg_present() {
             break
             ;;
          0|1|2|3)
+            return 0
+            ;;
+      esac
+   done
+   return 1
+}
+
+option_check_present() {
+   ## True if --check (audit-only mode) is among the arguments, before any
+   ## -- separator.
+   local arg
+   for arg in "$@" ; do
+      case "${arg}" in
+         --)
+            break
+            ;;
+         --check)
             return 0
             ;;
       esac
@@ -425,11 +517,24 @@ cmdline_level() {
 }
 
 main() {
+   ## Detected before init so the root/state-dir setup can be skipped for an
+   ## audit-only run.
+   if option_check_present "$@" ; then
+      option_check=true
+   else
+      option_check=false
+   fi
+
    init
-   ## An explicit numeric argument (dracut, manual use) wins. Otherwise honor
+   ## An explicit numeric argument (dracut, manual use) wins. --check audits the
+   ## strict level-3 baseline unless a level is given; otherwise honor
    ## remountsecure= from the kernel command line (default level 3).
    if ! level_arg_present "$@" ; then
-      set -- "$(cmdline_level)" "$@"
+      if [ "${option_check}" = "true" ] ; then
+         set -- 3 "$@"
+      else
+         set -- "$(cmdline_level)" "$@"
+      fi
    fi
    parse_options "$@"
    preparation
