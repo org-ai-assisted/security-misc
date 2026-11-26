@@ -284,10 +284,15 @@ audit_mount_options() {
    findmnt_rc=0
    live_options="$(findmnt --noheadings --output options --target "${mount_folder}" | tail -n 1)" || findmnt_rc="$?"
 
-   ## findmnt always exits 1 for any error.
+   ## findmnt exit status: 0 = found; 1 = no mount for this path (absent -> N/A);
+   ## >= 2 = error reading the mount table (fail closed as a deviation).
    ## live_options should always contain at least "ro" or "rw".
+   if [ "${findmnt_rc}" = "1" ] ; then
+      "${output_command[@]}" "N/A: '${mount_folder}' no mount found"
+      return 0
+   fi
    if [ "${findmnt_rc}" != "0" ] || [ -z "${live_options}" ] ; then
-      "${output_command[@]}" "DEVIATION: '${mount_folder}' error reading mount options (findmnt rc: '${findmnt_rc}')"
+      "${output_command[@]}" "DEVIATION: '${mount_folder}' mount options unreadable (findmnt rc: '${findmnt_rc}')"
       deviation_count=$((deviation_count + 1))
       return 0
    fi
@@ -316,10 +321,6 @@ audit_mount_options() {
       deviation_count=$((deviation_count + 1))
    else
       "${output_command[@]}" "OK: '${mount_folder}' has intended mount options ('${intended_mount_options}')"
-   fi
-
-   if [ "${deviation_count}" -gt 0 ] ; then
-      exit_code=1
    fi
 }
 
@@ -464,6 +465,13 @@ end() {
    ## Debugging.
    #"${output_command[@]}" "INFO: 'findmnt --list' output at the END."
    #"${output_command[@]}" "$(findmnt --list)"
+
+   ## Fail closed on any audited deviation (missing option or unreadable mount).
+   ## Computed once here, after every mountpoint, so an early return in the
+   ## per-mount audit cannot bypass the failing exit.
+   if [ "${deviation_count}" -gt 0 ] ; then
+      exit_code=1
+   fi
 
    "${output_command[@]}" ""
    "${output_command[@]}" "INFO: exit_code: ${exit_code}"
