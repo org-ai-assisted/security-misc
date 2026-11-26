@@ -479,7 +479,76 @@ end() {
    exit "${exit_code}"
 }
 
+## Managed GRUB drop-in recording the chosen remount-secure level.
+## Overridable via environment for testing.
+remount_secure_managed_grub_drop_in="${remount_secure_managed_grub_drop_in:-/etc/default/grub.d/40_remount_secure_managed.cfg}"
+
+get_level() {
+   ## Print the configured remount-secure level (0-3) for GUIs/CLIs to read.
+   local level
+   level=''
+   if [ -r "${remount_secure_managed_grub_drop_in}" ]; then
+      level="$(grep -oE 'remountsecure=[0-3]' -- "${remount_secure_managed_grub_drop_in}" | tail -n 1)" || true
+      level="${level#remountsecure=}"
+   fi
+   ## Absent/unset -> report the assumed default (enabled by default at level 3,
+   ## established by security-misc defaults; see 40_remount_secure.cfg).
+   [ -n "${level}" ] || level='3'
+   printf '%s\n' "${level}"
+}
+
+set_level() {
+   ## Record the chosen level on the kernel command line via a managed GRUB
+   ## drop-in, then regenerate grub.cfg. A reboot is required to take effect.
+   ## Level 0 is written explicitly; remount-secure itself then no-ops.
+   local level dir tmp
+   level="${1:-}"
+   case "${level}" in
+      0|1|2|3) ;;
+      *)
+         printf '%s\n' "ERROR: invalid level '${level}', expected 0, 1, 2, or 3." >&2
+         exit 1
+         ;;
+   esac
+
+   dir="$(dirname -- "${remount_secure_managed_grub_drop_in}")"
+   mkdir --parents -- "${dir}"
+   tmp="$(mktemp -- "${remount_secure_managed_grub_drop_in}.XXXXXX")"
+   {
+      printf '%s\n' '## Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>'
+      printf '%s\n' '## See the file COPYING for copying conditions.'
+      printf '%s\n' '##'
+      printf '%s\n' "## Managed by 'remount-secure --set-level'. Do not edit by hand."
+      printf '%s\n' '## https://www.kicksecure.com/wiki/Noexec'
+      printf '%s\n' "GRUB_CMDLINE_LINUX=\"\$GRUB_CMDLINE_LINUX remountsecure=${level}\""
+   } > "${tmp}"
+   mv -- "${tmp}" "${remount_secure_managed_grub_drop_in}"
+   printf '%s\n' "INFO: remount-secure level set to '${level}' in '${remount_secure_managed_grub_drop_in}'."
+
+   if command -v update-grub >/dev/null 2>&1; then
+      printf '%s\n' "INFO: regenerating grub configuration (update-grub)."
+      update-grub
+   else
+      printf '%s\n' "WARNING: 'update-grub' not found; grub configuration not regenerated." >&2
+   fi
+   printf '%s\n' "INFO: A reboot is required for the change to take effect."
+}
+
 main() {
+   ## Configuration subcommands (full OS only; never used in dracut, which
+   ## invokes 'remount-secure <level>' directly).
+   case "${1:-}" in
+      --get-level)
+         get_level
+         exit 0
+         ;;
+      --set-level)
+         shift
+         set_level "${1:-}"
+         exit 0
+         ;;
+   esac
+
    init
    parse_options "$@"
    require_root_maybe

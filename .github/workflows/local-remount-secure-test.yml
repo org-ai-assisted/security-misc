@@ -1,0 +1,54 @@
+---
+## Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Regression test for 'remount-secure --get-level' / '--set-level', which
+## back the System Maintenance Panel "Exec / Noexec Settings" dialog.
+## See ci/tests/remount_secure/test_set_level.sh.
+
+name: Test remount-secure
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test remount-secure
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    ## CI runs only where we enabled it; ANDed with the existing guard.
+    ## Unset variable -> skipped, no runner, run stays green.
+    if: >-
+      vars.CI_ENABLED_ORG_AI_ASSISTED == 'true'
+      && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      ## The test's cleanup uses safe-rm.
+      - name: Install safe-rm
+        uses: org-ai-assisted/developer-meta-files/.github/actions/install-deps@master
+        with:
+          apt-packages: 'safe-rm'
+
+      ## Root-free and grub-free: the test redirects the managed GRUB drop-in
+      ## to a temp file and stubs 'update-grub' on PATH.
+      - name: remount-secure get/set-level regression test
+        run: ci/tests/remount_secure/test_set_level.sh
