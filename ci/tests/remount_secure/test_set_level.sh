@@ -70,6 +70,13 @@ bash -- "${rs_bin}" --set-level 2 >/dev/null \
   || fail "--set-level 2 exited non-zero."
 grep --quiet --fixed-strings 'remountsecure=2' -- "${remount_secure_managed_grub_drop_in}" \
   || fail "drop-in does not contain 'remountsecure=2'."
+
+## The drop-in must be world-readable: set_level runs as root, but --get-level
+## is read unprivileged (the GUI), and mktemp creates it 0600.
+mode="$(stat --format='%a' -- "${remount_secure_managed_grub_drop_in}")"
+[ "${mode}" = '644' ] \
+  || fail "drop-in mode is '${mode}', expected 644 (unprivileged --get-level must read it)."
+
 level="$(bash -- "${rs_bin}" --get-level)"
 [ "${level}" = '2' ] \
   || fail "after set-level 2: expected '2', got '${level}'."

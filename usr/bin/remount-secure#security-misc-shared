@@ -522,6 +522,10 @@ set_level() {
       printf '%s\n' '## https://www.kicksecure.com/wiki/Noexec'
       printf '%s\n' "GRUB_CMDLINE_LINUX=\"\$GRUB_CMDLINE_LINUX remountsecure=${level}\""
    } > "${tmp}"
+   ## World-readable like the sibling grub.d drop-ins: set_level runs as root,
+   ## but '--get-level' is read unprivileged (e.g. by the GUI), and mktemp
+   ## creates 0600. The level is not secret (it is on the kernel cmdline).
+   chmod 0644 -- "${tmp}"
    mv -- "${tmp}" "${remount_secure_managed_grub_drop_in}"
    printf '%s\n' "INFO: remount-secure level set to '${level}' in '${remount_secure_managed_grub_drop_in}'."
 
