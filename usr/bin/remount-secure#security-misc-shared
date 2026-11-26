@@ -123,6 +123,7 @@ parse_options() {
        case ${1:-} in
            0|1|2|3)
                level_to_mount_options "${1}"
+               parsed=true
                shift
                ;;
            --check)
@@ -145,6 +146,10 @@ parse_options() {
                exit 1
                ;;
            *)
+               if [ -n "${1:-}" ]; then
+                  "${output_command[@]}" "ERROR: unexpected argument: ${1}" >&2
+                  exit 1
+               fi
                break
                ;;
        esac
@@ -191,22 +196,17 @@ parse_options() {
             else
                level_to_mount_options 3
             fi
-            parsed='true'
+         else
+            ## No remountsecure= token on the kernel cmdline: level 3 is the default.
+            level_to_mount_options 3
          fi
+         parsed='true'
       fi
    fi
 
-   if [ "${parsed}" = "true" ]; then
-      return 0
-   fi
-
-   "${output_command[@]}" "ERROR: syntax error. use either:
-$0 0
-$0 1
-$0 2
-$0 3"
-
-   exit 1
+   ## parse_options always resolves a level now (explicit arg, cmdline token, or
+   ## the level-3 default), so parsed is invariably true here.
+   return 0
 }
 
 preparation() {

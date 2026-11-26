@@ -611,7 +611,9 @@ would require manual tuning for a given specific system, we handle it by
 creating a very solid configuration file for that very system on package
 installation.
 
-Not enabled by default yet. In development. Help welcome.
+Enabled by default at level 3 (nosuid, nodev and noexec for all mount points,
+including /home). Override via the `remountsecure=0..2` kernel parameter or
+`remount-secure --set-level N`.
 
 - https://www.kicksecure.com/wiki/Dev/remount-secure
 - https://github.com/Kicksecure/security-misc/issues/157
@@ -1010,8 +1012,8 @@ These can be opted-in by the user:
 - `permission-hardener.service` - Applies permission hardening at boot.
   See [permission-hardener.service](https://www.kicksecure.com/wiki/SUID_Disabler_and_Permission_Hardener#permission-hardener.service).
 
-- `remount-secure.service` - Remounts filesystems with hardened options.
-  In development. See [Remount Secure](https://www.kicksecure.com/wiki/Dev/remount-secure).
+- `remount-secure.service` - Remounts filesystems with hardened mount options;
+  enabled by default at level 3. See [Remount Secure](https://www.kicksecure.com/wiki/Dev/remount-secure).
 
 - `proc-hidepid.service` - Mounts `/proc` with `hidepid=2`.
   See [hidepid](https://www.kicksecure.com/wiki/Security-misc#hidepid).

@@ -10,6 +10,9 @@
 ## Remount Secure provides enhanced security via mount options:
 ## https://www.kicksecure.com/wiki/Security-misc#Remount_Secure
 
+## Enabled by default at level 3 (Option D below). To change the level, uncomment
+## exactly one option; `remount-secure --set-level N` overrides it at runtime.
+
 ## Option A (No Security):
 ## Disable Remount Secure.
 ##
