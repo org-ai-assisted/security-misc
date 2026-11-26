@@ -10,10 +10,17 @@
 ## https://www.kicksecure.com/wiki/Dev/Strong_Linux_User_Account_Isolation
 ## man namespace.conf
 
-## FIXME: When elevating to root using `sudo`, the run-as-root process will see
-## the calling user's variants of /tmp and friends, not the system instance.
-## Maybe when logging in as root, use pam_namespace.so with the 'unmnt_only'
-## argument?
+## Root reached by elevation (sudo, su -) gets the SYSTEM instance of these
+## directories, not the calling user's. The pam-config (namespace-security-misc)
+## runs a second, uid-0-gated `pam_namespace.so unmnt_only` that unshares and
+## unmounts the inherited per-user binds, so root never silently operates inside
+## a mount view an unprivileged user primed (a categorical privilege-escalation
+## surface). The caller's own session is unaffected (the unmount happens in the
+## elevated process's fresh namespace).
+##
+## Accepted consequence: a user->root /tmp handoff such as
+## `echo x >/tmp/f; sudo cat /tmp/f` no longer works. Do both sides as root,
+## redirect in the caller (`sudo cat </tmp/f`), or use a non-/tmp path.
 
 /tmp       /run/pam-namespace/tmp-inst/   user:iscript=/usr/libexec/security-misc/pam-namespace-init   root
 /var/tmp   /var/tmp/tmp-inst/             user   root

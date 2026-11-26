@@ -4,3 +4,5 @@ Priority: 128
 Session-Type: Additional
 Session:
 	required	pam_namespace.so
+	[success=1 default=ignore]	pam_succeed_if.so quiet uid ne 0
+	optional	pam_namespace.so unmnt_only
