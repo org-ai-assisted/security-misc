@@ -172,6 +172,15 @@ def scenario_hotplug(bin_path, cap, UInput, e):
             fail("emerg-shutdown never registered the startup keyboard.\n"
                  "--- emerg-shutdown output ---\n" + reader.text)
 
+        ## 'supports all panic key groups' is printed DURING the startup scan.
+        ## Wait for the post-enumeration marker before hotplugging B, so B cannot
+        ## be picked up by a startup scan still in progress -- otherwise the
+        ## pre-inotify binary could register B during enumeration and this canary
+        ## would false-pass instead of exercising the inotify hotplug path.
+        if not reader.wait_for("Set up poll fds", STEP_TIMEOUT):
+            fail("emerg-shutdown never finished startup enumeration.\n"
+                 "--- emerg-shutdown output ---\n" + reader.text)
+
         ## Hotplug keyboard B and wait for emerg-shutdown to register it. On the
         ## pre-inotify binary this never happens -> the test fails here.
         kbd_b = UInput(cap, name="emerg-shutdown-test-kbd-b")
