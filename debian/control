@@ -30,7 +30,7 @@ Rules-Requires-Root: no
 ## >  security-misc is to be removed
 Package: security-misc-shared
 Architecture: all
-Pre-Depends: helper-scripts
+Pre-Depends: helper-scripts (>= 3:54.6-1)
 Depends: adduser,
          apparmor-profile-dist,
          build-essential,
