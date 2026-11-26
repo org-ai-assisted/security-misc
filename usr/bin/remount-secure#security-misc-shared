@@ -485,11 +485,17 @@ remount_secure_managed_grub_drop_in="${remount_secure_managed_grub_drop_in:-/etc
 
 get_level() {
    ## Print the configured remount-secure level (0-3) for GUIs/CLIs to read.
-   local level
+   ## Token matching mirrors the boot-time cmdline parser: a bounded
+   ## 'remountsecure=<0-3>' (so 'noremountsecure=1' / 'remountsecure=10' do not
+   ## match), last occurrence wins. Reads only the managed drop-in.
+   local level line
    level=''
    if [ -r "${remount_secure_managed_grub_drop_in}" ]; then
-      level="$(grep -oE 'remountsecure=[0-3]' -- "${remount_secure_managed_grub_drop_in}" | tail -n 1)" || true
-      level="${level#remountsecure=}"
+      while IFS= read -r line; do
+         if [[ "${line}" =~ (^|[^[:alnum:]_])remountsecure=([0-3])([^[:alnum:]]|$) ]]; then
+            level="${BASH_REMATCH[2]}"
+         fi
+      done < "${remount_secure_managed_grub_drop_in}"
    fi
    ## Absent/unset -> report the assumed default (enabled by default at level 3,
    ## established by security-misc defaults; see 40_remount_secure.cfg).

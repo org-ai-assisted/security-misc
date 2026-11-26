@@ -95,6 +95,15 @@ level="$(bash -- "${rs_bin}" --get-level)"
 [ "${level}" = '0' ] \
   || fail "after set-level 0: expected '0', got '${level}'."
 
+## get-level must not mis-read an unbounded substring as a level.
+## Literal, unexpanded $GRUB_CMDLINE_LINUX; single quotes intentional.
+# shellcheck disable=SC2016
+printf '%s\n' 'GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX noremountsecure=1"' \
+  > "${remount_secure_managed_grub_drop_in}"
+level="$(bash -- "${rs_bin}" --get-level)"
+[ "${level}" = '3' ] \
+  || fail "get-level mis-parsed 'noremountsecure=1' as '${level}' (expected 3)."
+
 ## An out-of-range level must fail closed.
 rc=0
 bash -- "${rs_bin}" --set-level 9 >/dev/null 2>&1 || rc="$?"
