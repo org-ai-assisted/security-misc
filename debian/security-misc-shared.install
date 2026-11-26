@@ -11,6 +11,7 @@ etc/apt/apt.conf.d/40sandbox#security-misc-shared => /etc/apt/apt.conf.d/40sandb
 etc/default/grub.d/40_cpu_mitigations.cfg#security-misc-shared => /etc/default/grub.d/40_cpu_mitigations.cfg
 etc/default/grub.d/40_kernel_hardening.cfg#security-misc-shared => /etc/default/grub.d/40_kernel_hardening.cfg
 etc/default/grub.d/40_remount_secure.cfg#security-misc-shared => /etc/default/grub.d/40_remount_secure.cfg
+etc/remount-secure.d/README#security-misc-shared => /etc/remount-secure.d/README
 etc/default/grub.d/40_signed_modules.cfg#security-misc-shared => /etc/default/grub.d/40_signed_modules.cfg
 etc/default/grub.d/41_quiet_boot.cfg#security-misc-shared => /etc/default/grub.d/41_quiet_boot.cfg
 etc/default/grub.d/41_recovery_restrict.cfg#security-misc-shared => /etc/default/grub.d/41_recovery_restrict.cfg

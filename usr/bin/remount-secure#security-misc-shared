@@ -129,7 +129,6 @@ parse_options() {
            --check)
                "${output_command[@]}" "INFO: --check (audit only)"
                option_check=true
-               parsed=true
                shift
                ;;
            --force)
@@ -161,6 +160,17 @@ parse_options() {
    [[ -v home_noexec_maybe ]] || home_noexec_maybe=""
    [[ -v most_noexec_maybe ]] || most_noexec_maybe=""
 
+   ## No explicit level on argv (the dracut and manual 'remount-secure <level>'
+   ## path): resolve the level from the drop-in configuration, honoring the
+   ## 'noremountsecure' kernel-cmdline debug off-switch. level_to_mount_options 0
+   ## exits, so only levels 1-3 reach the summary below.
+   if [ "${parsed}" = 'false' ]; then
+      local effective_level
+      effective_level="$(resolve_effective_level)"
+      level_to_mount_options "${effective_level}"
+      parsed='true'
+   fi
+
    "${output_command[@]}" "INFO: using nosuid,nodev: yes"
 
    if [ "${home_noexec_maybe}" = "" ]; then
@@ -177,35 +187,6 @@ parse_options() {
       return 0
    fi
 
-   if [ "${parsed}" = 'false' ]; then
-      if [ "${option_check}" = 'true' ]; then
-         level_to_mount_options 3
-         parsed='true'
-      else
-         local cmdline
-         cmdline=''
-         if [ -r /proc/cmdline ]; then
-            read -r cmdline < /proc/cmdline || true
-         elif [ -r /proc/1/cmdline ]; then
-            cmdline="$(tr '\0' ' ' < /proc/1/cmdline)" || true
-         fi
-         if [[ "${cmdline}" =~ (^| )"remountsecure"(=([^ ]*)?)?($| ) ]]; then
-            if [ -n "${BASH_REMATCH[3]:-}" ] \
-               && [[ "${BASH_REMATCH[3]}" =~ ^(0|1|2|3)$ ]]; then
-               level_to_mount_options "${BASH_REMATCH[3]}"
-            else
-               level_to_mount_options 3
-            fi
-         else
-            ## No remountsecure= token on the kernel cmdline: level 3 is the default.
-            level_to_mount_options 3
-         fi
-         parsed='true'
-      fi
-   fi
-
-   ## parse_options always resolves a level now (explicit arg, cmdline token, or
-   ## the level-3 default), so parsed is invariably true here.
    return 0
 }
 
@@ -479,69 +460,107 @@ end() {
    exit "${exit_code}"
 }
 
-## Managed GRUB drop-in recording the chosen remount-secure level.
-## Overridable via environment for testing.
-remount_secure_managed_grub_drop_in="${remount_secure_managed_grub_drop_in:-/etc/default/grub.d/40_remount_secure_managed.cfg}"
+## Drop-in configuration directories (system + local admin). Overridable via
+## environment for testing. The default level is hardcoded; drop-ins override it.
+remount_secure_etc_dropin_dir="${remount_secure_etc_dropin_dir:-/etc/remount-secure.d}"
+remount_secure_local_dropin_dir="${remount_secure_local_dropin_dir:-/usr/local/etc/remount-secure.d}"
+## Written by '--set-level'. A later '/usr/local/etc' drop-in or a
+## higher-numbered admin drop-in can still override it (last sourced wins).
+remount_secure_managed_conf="${remount_secure_managed_conf:-${remount_secure_etc_dropin_dir}/40_managed.conf}"
+## Default when no drop-in sets 'remount_secure_level' (enabled at level 3).
+remount_secure_default_level="${remount_secure_default_level:-3}"
+## Kernel command line source (overridable for testing).
+remount_secure_cmdline_file="${remount_secure_cmdline_file:-/proc/cmdline}"
 
-get_level() {
-   ## Print the configured remount-secure level (0-3) for GUIs/CLIs to read.
-   ## Token matching mirrors the boot-time cmdline parser: a bounded
-   ## 'remountsecure=<0-3>' (so 'noremountsecure=1' / 'remountsecure=10' do not
-   ## match), last occurrence wins. Reads only the managed drop-in.
-   local level line
-   level=''
-   if [ -r "${remount_secure_managed_grub_drop_in}" ]; then
-      while IFS= read -r line; do
-         if [[ "${line}" =~ (^|[^[:alnum:]_])remountsecure=([0-3])([^[:alnum:]]|$) ]]; then
-            level="${BASH_REMATCH[2]}"
-         fi
-      done < "${remount_secure_managed_grub_drop_in}"
+read_dropin_level() {
+   ## Print the drop-in-configured level (0-3); defaults to
+   ## remount_secure_default_level. The trusted '*.conf' fragments are sourced
+   ## via the shared, hardened 'source_config' helper (ownership/mode/symlink
+   ## checks plus 'bash -n'); later directories and files win. Full-OS only: the
+   ## dracut initramfs lacks helper-scripts and reaches remount-secure via an
+   ## explicit argv level instead, so this is never used there.
+   local source_folder_helper level
+   source_folder_helper="${HELPER_SCRIPTS_PATH:-}/usr/libexec/helper-scripts/source_folder.bsh"
+   remount_secure_level=''
+   if [ -r "${source_folder_helper}" ]; then
+      # shellcheck source=../../../helper-scripts/usr/libexec/helper-scripts/source_folder.bsh
+      source "${source_folder_helper}"
+      if ! source_config "${remount_secure_etc_dropin_dir}" "${remount_secure_local_dropin_dir}"; then
+         printf '%s\n' "$0: WARNING: reading remount-secure drop-in configuration failed; using default level ${remount_secure_default_level}." >&2
+      fi
    fi
-   ## Absent/unset -> report the assumed default (enabled by default at level 3,
-   ## established by security-misc defaults; see 40_remount_secure.cfg).
-   [ -n "${level}" ] || level='3'
+   level="${remount_secure_level:-${remount_secure_default_level}}"
+   case "${level}" in
+      0|1|2|3)
+         ;;
+      *)
+         printf '%s\n' "$0: WARNING: invalid configured level '${level}'; using default ${remount_secure_default_level}." >&2
+         level="${remount_secure_default_level}"
+         ;;
+   esac
    printf '%s\n' "${level}"
 }
 
+resolve_effective_level() {
+   ## The level actually enforced at boot: the 'noremountsecure' kernel-cmdline
+   ## debug off-switch wins (level 0, to recover from an exec-related boot
+   ## problem), otherwise the drop-in configuration.
+   local cmdline
+   cmdline=''
+   if [ -r "${remount_secure_cmdline_file}" ]; then
+      read -r cmdline < "${remount_secure_cmdline_file}" || true
+   elif [ -r /proc/1/cmdline ]; then
+      cmdline="$(tr '\0' ' ' < /proc/1/cmdline)" || true
+   fi
+   case " ${cmdline} " in
+      *" noremountsecure "*)
+         printf '%s\n' 0
+         return 0
+         ;;
+   esac
+   read_dropin_level
+}
+
+get_level() {
+   ## Print the configured remount-secure level (0-3) for GUIs/CLIs (e.g.
+   ## sysmaint-panel). Reports the persistent drop-in level, not the transient
+   ## 'noremountsecure' debug override.
+   read_dropin_level
+}
+
 set_level() {
-   ## Record the chosen level on the kernel command line via a managed GRUB
-   ## drop-in, then regenerate grub.cfg. A reboot is required to take effect.
-   ## Level 0 is written explicitly; remount-secure itself then no-ops.
+   ## Record the chosen level in a managed drop-in. Applied on the next boot (or
+   ## immediately via 'remount-secure --force <level>'). Level 0 disables
+   ## remount-secure (it then no-ops at boot).
    local level dir tmp
    level="${1:-}"
    case "${level}" in
-      0|1|2|3) ;;
+      0|1|2|3)
+         ;;
       *)
          printf '%s\n' "ERROR: invalid level '${level}', expected 0, 1, 2, or 3." >&2
          exit 1
          ;;
    esac
 
-   dir="$(dirname -- "${remount_secure_managed_grub_drop_in}")"
+   dir="$(dirname -- "${remount_secure_managed_conf}")"
    mkdir --parents -- "${dir}"
-   tmp="$(mktemp -- "${remount_secure_managed_grub_drop_in}.XXXXXX")"
+   tmp="$(mktemp -- "${remount_secure_managed_conf}.XXXXXX")"
    {
       printf '%s\n' '## Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>'
       printf '%s\n' '## See the file COPYING for copying conditions.'
       printf '%s\n' '##'
       printf '%s\n' "## Managed by 'remount-secure --set-level'. Do not edit by hand."
       printf '%s\n' '## https://www.kicksecure.com/wiki/Noexec'
-      printf '%s\n' "GRUB_CMDLINE_LINUX=\"\$GRUB_CMDLINE_LINUX remountsecure=${level}\""
+      printf '%s\n' "remount_secure_level=${level}"
    } > "${tmp}"
-   ## World-readable like the sibling grub.d drop-ins: set_level runs as root,
-   ## but '--get-level' is read unprivileged (e.g. by the GUI), and mktemp
-   ## creates 0600. The level is not secret (it is on the kernel cmdline).
+   ## World-readable: '--set-level' runs as root but '--get-level' is read
+   ## unprivileged (e.g. by the GUI), and mktemp creates 0600. The level is not
+   ## secret.
    chmod 0644 -- "${tmp}"
-   mv -- "${tmp}" "${remount_secure_managed_grub_drop_in}"
-   printf '%s\n' "INFO: remount-secure level set to '${level}' in '${remount_secure_managed_grub_drop_in}'."
-
-   if command -v update-grub >/dev/null 2>&1; then
-      printf '%s\n' "INFO: regenerating grub configuration (update-grub)."
-      update-grub
-   else
-      printf '%s\n' "WARNING: 'update-grub' not found; grub configuration not regenerated." >&2
-   fi
-   printf '%s\n' "INFO: A reboot is required for the change to take effect."
+   mv -- "${tmp}" "${remount_secure_managed_conf}"
+   printf '%s\n' "INFO: remount-secure level set to '${level}' in '${remount_secure_managed_conf}'."
+   printf '%s\n' "INFO: A reboot is required for the change to take effect (or run 'remount-secure --force ${level}')."
 }
 
 main() {

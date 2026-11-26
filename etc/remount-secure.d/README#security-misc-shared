@@ -1,0 +1,36 @@
+remount-secure drop-in configuration
+=====================================
+
+remount-secure reads '*.conf' fragments from, in increasing precedence:
+
+  /etc/remount-secure.d/*.conf           (admin)
+  /usr/local/etc/remount-secure.d/*.conf (local admin, highest precedence)
+
+Fragments are sourced as shell 'key=value'; later files win. Only '*.conf'
+files are read (this README is ignored).
+
+Supported key:
+
+  remount_secure_level=3
+
+Levels:
+
+  0  off (remount-secure no-ops)
+  1  nosuid, nodev
+  2  + noexec for most mount points, except /home
+  3  + noexec including /home (default)
+
+Example - lower to level 2 so executables in /home keep working:
+
+  printf '%s\n' 'remount_secure_level=2' | sudo tee /etc/remount-secure.d/50_local.conf
+
+Or use the helper (writes /etc/remount-secure.d/40_managed.conf):
+
+  sudo remount-secure --set-level 2
+
+A reboot applies the change (or run 'sudo remount-secure --force <level>').
+
+Debugging: add 'noremountsecure' to the kernel command line to disable
+remount-secure for a single boot without changing the configured level.
+
+https://www.kicksecure.com/wiki/Noexec

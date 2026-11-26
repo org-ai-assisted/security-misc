@@ -1,34 +1,24 @@
 ## Copyright (C) 2023 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
-## Definitions:
-## KSPP=yes: compliant with recommendations by the KSPP
-## KSPP=partial: partially compliant with recommendations by the KSPP
-## KSPP=no: not (currently) compliant with recommendations by the KSPP
-## If there is no explicit KSPP compliance notice, the setting is not mentioned by the KSPP.
-
 ## Remount Secure provides enhanced security via mount options:
 ## https://www.kicksecure.com/wiki/Security-misc#Remount_Secure
+## https://www.kicksecure.com/wiki/Noexec
 
-## Enabled by default at level 3 (Option D below). To change the level, uncomment
-## exactly one option; `remount-secure --set-level N` overrides it at runtime.
+## Enabled by default at level 3 (nosuid, nodev and noexec for all mount points,
+## including /home).
 
-## Option A (No Security):
-## Disable Remount Secure.
-##
-#GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX remountsecure=0"
+## The level is NOT configured on the kernel command line. Configure it with a
+## drop-in file instead:
+##   /etc/remount-secure.d/*.conf           (admin)
+##   /usr/local/etc/remount-secure.d/*.conf (local admin, highest precedence)
+## containing, for example:
+##   remount_secure_level=2
+## or use the helper:
+##   sudo remount-secure --set-level 2
+## Levels: 0 = off; 1 = nosuid,nodev; 2 = + noexec except /home;
+##         3 = + noexec including /home.
 
-## Option B (Low Security):
-## Re-mount with nodev and nosuid only.
-##
-#GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX remountsecure=1"
-
-## Option C (Medium Security):
-## Re-mount with nodev, nosuid, and noexec for most mount points, excluding /home.
-##
-#GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX remountsecure=2"
-
-## Option D (Highest Security):
-## Re-mount with nodev, nosuid, and noexec for all mount points including /home.
-##
-#GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX remountsecure=3"
+## Debugging only: add 'noremountsecure' to the kernel command line to disable
+## remount-secure for a single boot (e.g. to recover from an exec-related boot
+## problem). This does not change the configured level.
