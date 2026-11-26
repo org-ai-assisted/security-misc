@@ -27,6 +27,8 @@ debug_maybe=()
 for config_file in /etc/security-misc/emerg-shutdown/*.conf /usr/local/etc/security-misc/emerg-shutdown/*.conf; do
   if [ -f "${config_file}" ]; then
     bash -n "${config_file}"
+    ## Runtime admin config; no static path to analyze.
+    # shellcheck disable=SC1090
     source "${config_file}"
   fi
 done
@@ -44,18 +46,27 @@ else
   ## Find the devices that make up the root device
   readarray -t root_devices < <(/usr/libexec/helper-scripts/get-backing-devices-for-mountpoint '/') || true;
 
-  if [ ! -f '/run/emerg-shutdown' ]; then
-    if [ -f '/usr/bin/emerg-shutdown' ]; then
-      cp -- /usr/bin/emerg-shutdown /run/emerg-shutdown
-    else
-      /usr/libexec/security-misc/compile-emerg-shutdown \
-        /usr/src/security-misc/emerg-shutdown.c \
-        /run/emerg-shutdown \
-        || {
-          printf '%s\n' 'Could not compile emerg-shutdown executable!'
-          exit 1
-        }
+  if [ -f '/usr/bin/emerg-shutdown' ]; then
+    ## Refresh the /run copy whenever it differs from the installed binary. The
+    ## binary is cached in tmpfs /run so it survives root-filesystem removal; a
+    ## package upgrade updates /usr/bin but leaves the OLD binary in /run, so
+    ## without this the service keeps running the stale binary until reboot. This
+    ## wrapper runs before exec, when no emerg-shutdown holds the /run copy, so
+    ## replacing it is safe; write + atomic rename avoids a torn binary.
+    if ! cmp -s -- /usr/bin/emerg-shutdown /run/emerg-shutdown 2>/dev/null; then
+      run_tmp="$(mktemp -- /run/emerg-shutdown.XXXXXX)"
+      cp -- /usr/bin/emerg-shutdown "${run_tmp}"
+      chmod 0755 -- "${run_tmp}"
+      mv -f -- "${run_tmp}" /run/emerg-shutdown
     fi
+  elif [ ! -f '/run/emerg-shutdown' ]; then
+    /usr/libexec/security-misc/compile-emerg-shutdown \
+      /usr/src/security-misc/emerg-shutdown.c \
+      /run/emerg-shutdown \
+      || {
+        printf '%s\n' 'Could not compile emerg-shutdown executable!'
+        exit 1
+      }
   fi
 
   ## memlockd daemonizes itself, so no need to background it.

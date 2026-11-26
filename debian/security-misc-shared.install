@@ -108,7 +108,6 @@ usr/lib/systemd/system/user@.service.d/sysfs.conf#security-misc-shared => /usr/l
 usr/lib/systemd/user/fm-shim.service#security-misc-shared => /usr/lib/systemd/user/fm-shim.service
 usr/lib/systemd/user/usbguard-notifier.service.d/30_security-misc.conf#security-misc-shared => /usr/lib/systemd/user/usbguard-notifier.service.d/30_security-misc.conf
 usr/lib/tmpfiles.d/30_security-misc-polyinstantiation.conf#security-misc-shared => /usr/lib/tmpfiles.d/30_security-misc-polyinstantiation.conf
-usr/lib/udev/rules.d/95-emerg-shutdown.rules#security-misc-shared => /usr/lib/udev/rules.d/95-emerg-shutdown.rules
 usr/libexec/security-misc/askpass#security-misc-shared => /usr/libexec/security-misc/askpass
 usr/libexec/security-misc/block-unsafe-logins#security-misc-shared => /usr/libexec/security-misc/block-unsafe-logins
 usr/libexec/security-misc/build-emerg-shutdown#security-misc-shared => /usr/libexec/security-misc/build-emerg-shutdown

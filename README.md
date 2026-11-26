@@ -847,11 +847,11 @@ See:
 
 A dracut module bundles the emergency shutdown binary, its systemd service,
 and configuration files into the initramfs so the panic key sequence is
-available even during early boot. A udev rule restarts the service whenever
-a keyboard is added or removed. See:
+available even during early boot. The service watches `/dev/input` with
+inotify, so keyboards plugged in after startup are monitored for the panic
+key sequence without restarting the service. See:
 
 - `/usr/lib/dracut/modules.d/99emerg-shutdown/module-setup.sh`
-- `/usr/lib/udev/rules.d/95-emerg-shutdown.rules`
 
 ## File Manager D-Bus shim
 
