@@ -71,13 +71,16 @@ out="$(bash -- "${rs_bin}" --check 1 2>&1 || true)"
 assert_contains 'level 1' "${out}" 'INFO: level 1/3'
 assert_absent   'level 1' "${out}" 'using noexec for all: yes'
 
-## Multiple explicit levels on argv: the last one wins cleanly.
-## 'level_to_mount_options' resets its noexec flags on each call; without that,
-## '3 2' bleeds the level-3 /home noexec into the level-2 result and the summary
-## wrongly reports 'noexec for all'.
-out="$(bash -- "${rs_bin}" --check 3 2 2>&1 || true)"
-assert_contains 'multi-level 3 2' "${out}" 'using noexec for most (not all): yes'
-assert_absent   'multi-level 3 2' "${out}" 'using noexec for all: yes'
+## A level is a single value. More than one level argument is a usage error --
+## fail closed rather than silently pick a winner. This also removes the
+## ambiguity where a leading '0' would opt out inside level_to_mount_options
+## before a later level is parsed, so '0 3' must not silently disable hardening.
+for multi in '3 2' '0 3'; do
+  read -r -a largs <<< "${multi}"
+  out="$(bash -- "${rs_bin}" --check "${largs[@]}" 2>&1 || true)"
+  assert_contains "multi-level '${multi}'" "${out}" 'only one level'
+  assert_absent   "multi-level '${multi}'" "${out}" 'Not using remount-secure'
+done
 
 ## Level 0: opt out entirely (exit 0, explicit warning).
 rc=0
@@ -120,18 +123,19 @@ out="$(HELPER_SCRIPTS_PATH=/nonexistent remount_secure_cmdline_file="${tmp_cmdli
 [ "${rc}" -eq 0 ] || fail "noremountsecure --check should exit 0, got ${rc}."
 assert_contains 'noremountsecure' "${out}" 'Not using remount-secure'
 
-## A drop-in read that FAILS after a fragment already set the level must fall
-## back to the ANNOUNCED default (3), never retain the stale partial value. Stub
-## a source_folder.bsh whose 'source_config' sets a level and then returns
-## non-zero -- exactly the 'an earlier fragment set remount_secure_level, a later
-## fragment failed bash -n' case. Without the failure-branch reset, the stale
-## level 0 wins and the audit wrongly reports an opt-out (fail-open + a warning
-## that lies about the level in effect).
+## A drop-in read that FAILS after a fragment already set state must fall back to
+## the hardcoded most-restrictive level (3), never to a stale or mutable partial
+## value. Stub a source_folder.bsh whose 'source_config' sets BOTH the level and
+## the default-level variable and then returns non-zero -- exactly the 'an earlier
+## fragment set these, a later fragment failed bash -n' case. The fallback must be
+## a hardcoded 3; blanking the level and deferring to the (now 0) default would
+## fail open and print a warning that lies about the level in effect.
 stub_helpers="$(mktemp --directory -t rs-stub-helpers.XXXXXX)"
 mkdir --parents -- "${stub_helpers}/usr/libexec/helper-scripts"
 {
   printf '%s\n' 'source_config() {'
   printf '%s\n' '  remount_secure_level=0'
+  printf '%s\n' '  remount_secure_default_level=0'
   printf '%s\n' '  return 1'
   printf '%s\n' '}'
 } > "${stub_helpers}/usr/libexec/helper-scripts/source_folder.bsh"

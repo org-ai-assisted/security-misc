@@ -88,11 +88,8 @@ require_root_maybe() {
 }
 
 level_to_mount_options() {
-   ## Authoritative per call: reset the level-gated noexec flags so a repeated
-   ## call (e.g. multiple level args) does not bleed a higher level's noexec into
-   ## a lower one. The last level on argv wins cleanly.
-   most_noexec_maybe=''
-   home_noexec_maybe=''
+   ## Called exactly once per run (parse_options rejects more than one level),
+   ## after init() has zeroed the level-gated noexec flags.
    case "${1:-}" in
       0)
          "${output_command[@]}" "WARNING: Not using remount-secure."
@@ -125,7 +122,15 @@ parse_options() {
    do
        case ${1:-} in
            0|1|2|3)
-               level_to_mount_options "${1}"
+               ## A level is a single value. Reject a second one instead of
+               ## silently picking a winner; record it and apply once after the
+               ## loop so a leading '0' cannot opt out before a later level is
+               ## seen.
+               if [ "${parsed:-false}" = 'true' ]; then
+                  "${output_command[@]}" "ERROR: only one level may be given." >&2
+                  exit 1
+               fi
+               level_arg="${1}"
                parsed=true
                shift
                ;;
@@ -160,14 +165,18 @@ parse_options() {
    [[ -v option_check ]] || option_check=false
    [[ -v option_force ]] || option_force=""
    [[ -v parsed ]] || parsed=false
+   [[ -v level_arg ]] || level_arg=""
    [[ -v home_noexec_maybe ]] || home_noexec_maybe=""
    [[ -v most_noexec_maybe ]] || most_noexec_maybe=""
 
-   ## No explicit level on argv (the dracut and manual 'remount-secure <level>'
-   ## path): resolve the level from the drop-in configuration, honoring the
-   ## 'noremountsecure' kernel-cmdline debug off-switch. level_to_mount_options 0
-   ## exits, so only levels 1-3 reach the summary below.
-   if [ "${parsed}" = 'false' ]; then
+   ## Apply the single explicit level if one was given; otherwise (the dracut and
+   ## manual 'remount-secure' path with no level) resolve it from the drop-in
+   ## configuration, honoring the 'noremountsecure' kernel-cmdline debug
+   ## off-switch. level_to_mount_options 0 exits, so only levels 1-3 reach the
+   ## summary below.
+   if [ "${parsed}" = 'true' ]; then
+      level_to_mount_options "${level_arg}"
+   else
       local effective_level
       effective_level="$(resolve_effective_level)"
       level_to_mount_options "${effective_level}"
@@ -499,12 +508,13 @@ read_dropin_level() {
       # shellcheck source=../../../helper-scripts/usr/libexec/helper-scripts/source_folder.bsh
       source "${source_folder_helper}"
       if ! source_config "${remount_secure_etc_dropin_dir}" "${remount_secure_local_dropin_dir}"; then
-         ## A failed read may have partially set the level before aborting. Clear
-         ## it so the announced default-level fallback is truthful and fails
-         ## closed (the most restrictive level), not stuck on a stale partial
-         ## value that could be an opt-out.
-         remount_secure_level=''
-         printf '%s\n' "$0: WARNING: reading remount-secure drop-in configuration failed; using default level ${remount_secure_default_level}." >&2
+         printf '%s\n' "$0: WARNING: reading remount-secure drop-in configuration failed; using the most restrictive level 3." >&2
+         ## Fail closed to the hardcoded most-restrictive level. A failed read can
+         ## leave partial or inconsistent state in both remount_secure_level and
+         ## remount_secure_default_level (fragments are sourced into this shell),
+         ## so derive the fallback from neither: emit the literal and return.
+         printf '%s\n' 3
+         return 0
       fi
    fi
    level="${remount_secure_level:-${remount_secure_default_level}}"
