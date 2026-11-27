@@ -57,6 +57,11 @@ jobs:
       - name: remount-secure option-parsing regression test
         run: ci/tests/remount_secure/test_parse_level.sh
 
+      ## Per-login /run/user/<uid> noexec hardening (--runtime-dir); stubs
+      ## id/findmnt/mount, so root-free.
+      - name: remount-secure runtime-dir regression test
+        run: ci/tests/remount_secure/test_runtime_dir.sh
+
       ## ubuntu-24.04 runners restrict unprivileged user namespaces via AppArmor,
       ## which the check-no-write test needs to simulate root. Lift the restriction
       ## where the knob exists; a no-op on kernels without it.

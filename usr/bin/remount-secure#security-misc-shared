@@ -591,10 +591,54 @@ set_level() {
    printf '%s\n' "INFO: A reboot is required for the change to take effect (or run 'remount-secure --force ${level}')."
 }
 
+runtime_dir() {
+   ## Harden the per-user XDG_RUNTIME_DIR (/run/user/<uid>) that systemd-logind
+   ## mounts per login. logind hardcodes nosuid,nodev (never noexec) and offers no
+   ## option for it, so this is invoked from an ExecStartPost drop-in on
+   ## user-runtime-dir@.service, AFTER logind has mounted and chowned the dir.
+   ## Runs per login against a FRESH tmpfs, so it always remounts (no status-file
+   ## skip, unlike the boot-time dispatch). noexec is added only at level >= 2
+   ## (matching /run); logind's nosuid,nodev already cover levels 0-1, so there is
+   ## nothing to add below 2. The 'noremountsecure' cmdline off-switch (-> level 0)
+   ## disables it too, via resolve_effective_level.
+   local uid effective_level
+   uid="${1:-}"
+   ## '%i' from the unit is the uid; require it numeric before it reaches a mount path.
+   case "${uid}" in
+      ''|*[!0-9]*)
+         printf '%s\n' "$0: ERROR: --runtime-dir requires a numeric uid, got '${uid}'." >&2
+         exit 1
+         ;;
+   esac
+   if [ "$(id -u)" != "0" ]; then
+      printf '%s\n' "$0: ERROR: --runtime-dir must run as root." >&2
+      exit 1
+   fi
+   effective_level="$(resolve_effective_level)"
+   if [ "${effective_level}" -lt 2 ]; then
+      printf '%s\n' "$0: INFO: level ${effective_level}: /run/user/${uid} kept at logind's nosuid,nodev (noexec starts at level 2)."
+      return 0
+   fi
+   if ! findmnt --noheadings -- "/run/user/${uid}" >/dev/null 2>&1 ; then
+      printf '%s\n' "$0: INFO: /run/user/${uid} not mounted; nothing to remount." >&2
+      return 0
+   fi
+   printf '%s\n' "$0: INFO: Executing: mount --make-private --options remount,nosuid,nodev,noexec /run/user/${uid}"
+   mount --make-private --options "remount,nosuid,nodev,noexec" "/run/user/${uid}"
+}
+
 main() {
    ## Configuration subcommands (full OS only; never used in dracut, which
    ## invokes 'remount-secure <level>' directly).
    case "${1:-}" in
+      --runtime-dir)
+         ## Per-login hardening of /run/user/<uid>, from the
+         ## user-runtime-dir@.service ExecStartPost drop-in. Single mountpoint, not
+         ## the full boot-time dispatch.
+         shift
+         runtime_dir "${1:-}"
+         exit 0
+         ;;
       --get-level)
          get_level
          exit 0

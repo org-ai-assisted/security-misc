@@ -105,6 +105,7 @@ usr/lib/systemd/system/remove-system-map.service#security-misc-shared => /usr/li
 usr/lib/systemd/system/run-pam-namespace.mount#security-misc-shared => /usr/lib/systemd/system/run-pam\x2dnamespace.mount
 usr/lib/systemd/system/sysinit-post.target#security-misc-shared => /usr/lib/systemd/system/sysinit-post.target
 usr/lib/systemd/system/usbguard.service.d/30_security-misc.conf#security-misc-shared => /usr/lib/systemd/system/usbguard.service.d/30_security-misc.conf
+usr/lib/systemd/system/user-runtime-dir@.service.d/30_remount-secure.conf#security-misc-shared => /usr/lib/systemd/system/user-runtime-dir@.service.d/30_remount-secure.conf
 usr/lib/systemd/system/user@.service.d/sysfs.conf#security-misc-shared => /usr/lib/systemd/system/user@.service.d/sysfs.conf
 usr/lib/systemd/user/fm-shim.service#security-misc-shared => /usr/lib/systemd/user/fm-shim.service
 usr/lib/systemd/user/usbguard-notifier.service.d/30_security-misc.conf#security-misc-shared => /usr/lib/systemd/user/usbguard-notifier.service.d/30_security-misc.conf
