@@ -92,3 +92,8 @@ jobs:
       ## bitset-width proof). No root, no uinput, no kernel module.
       - name: Panic-state unit test + CBMC proofs
         run: ci/tests/emerg_shutdown/run-static-tests.sh
+
+      ## codeql-prepare.sh correctness: header -> real .h copy, idempotent
+      ## refresh, precise .h-suffix match, no dereference of a symlinked source.
+      - name: codeql-prepare regression test
+        run: ci/tests/codeql_prepare/test_codeql_prepare.sh
