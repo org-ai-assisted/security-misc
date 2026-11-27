@@ -385,10 +385,9 @@ _var_log() {
 
 _var_cache() {
    mount_folder="${NEWROOT}/var/cache"
-   ## TODO: This will break vbox-guest-installer, as it extracts the Guest
-   ## Additions installer to
-   ## /var/cache/vm-config-dist/vbox-guest-additions-extracted-makeself, then
-   ## runs it from there. Should we really allow this to be noexec?
+   ## noexec here is intended. vbox-guest-installer (vm-config-dist) extracts and
+   ## runs the VirtualBox Guest Additions installer from /var/lib/vm-config-dist
+   ## (exec-allowed), not /var/cache, so a noexec /var/cache does not break it.
    intended_mount_options="nosuid,nodev${most_noexec_maybe}"
    remount_secure
 }
