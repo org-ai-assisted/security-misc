@@ -52,3 +52,11 @@ jobs:
       ## to a temp file and stubs 'update-grub' on PATH.
       - name: remount-secure get/set-level regression test
         run: ci/tests/remount_secure/test_set_level.sh
+
+      ## Option parsing / level resolution (drop-in default, 'noremountsecure').
+      - name: remount-secure option-parsing regression test
+        run: ci/tests/remount_secure/test_parse_level.sh
+
+      ## Audit (--check) must not write; simulates root via unprivileged userns.
+      - name: remount-secure check-no-write regression test
+        run: ci/tests/remount_secure/test_check_no_write.sh

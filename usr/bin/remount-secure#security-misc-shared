@@ -60,13 +60,11 @@ init() {
       "${output_command[@]}" "INFO: dracut detected: no"
       if [ "$(id -u)" = "0" ]; then
          running_as_root='true'
-         mkdir --parents -- "/run/remount-secure"
       fi
    else
       "${output_command[@]}" "INFO: dracut detected: yes - NEWROOT: '${NEWROOT}'"
       ## dracut does not have id. Saving space in initial ramdisk.
       running_as_root='true'
-      mkdir --parents -- "/run/remount-secure"
    fi
 
    exit_code=0
@@ -195,7 +193,13 @@ preparation() {
    #"${output_command[@]}" "INFO: 'findmnt --list' output at the START."
    #"${output_command[@]}" "$(findmnt --list)"
    #"${output_command[@]}" ""
-   true
+
+   ## Create the status-file directory only on the real remount path. '--check'
+   ## is a read-only audit and must not write, so a root '--check' on a
+   ## read-only '/run' cannot abort before the audit runs.
+   if [ "${option_check}" = "false" ]; then
+      mkdir --parents -- "${remount_secure_runtime_dir}"
+   fi
 }
 
 remount_secure() {
@@ -211,7 +215,7 @@ remount_secure() {
    status_file_name="${FUNCNAME[1]}"
    ## example status_file_name:
    ## _home
-   status_file_full_path="/run/remount-secure/${status_file_name}"
+   status_file_full_path="${remount_secure_runtime_dir}/${status_file_name}"
    ## example status_file_full_path:
    ## /run/remount-secure/_home
 
@@ -471,6 +475,10 @@ remount_secure_managed_conf="${remount_secure_managed_conf:-${remount_secure_etc
 remount_secure_default_level="${remount_secure_default_level:-3}"
 ## Kernel command line source (overridable for testing).
 remount_secure_cmdline_file="${remount_secure_cmdline_file:-/proc/cmdline}"
+## Runtime status-file directory (overridable for testing). Holds the per-mount
+## '_home'/'_tmp'/... markers; created only on the real remount path, never by
+## '--check' (the audit must not write).
+remount_secure_runtime_dir="${remount_secure_runtime_dir:-/run/remount-secure}"
 
 read_dropin_level() {
    ## Print the drop-in-configured level (0-3); defaults to
