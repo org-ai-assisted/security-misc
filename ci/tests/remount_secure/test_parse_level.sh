@@ -12,9 +12,9 @@
 ##   - an unrecognized argument fails closed (the parser must never silently
 ##     fall back to a level for a typo)
 ##
-## The no-argument service default (level 3 when no remountsecure= token is on
-## the kernel command line) enforces real mounts as root and is covered by the
-## image boot test, not here.
+## The 'noremountsecure' debug off-switch and the hardcoded no-config default
+## (level 3) are checked here via '--check'. The real mount enforcement as root
+## is covered by the image boot test.
 
 set -o errexit
 set -o nounset
@@ -85,5 +85,29 @@ for bad in 'bogus' '9'; do
   [ "${rc}" -ne 0 ] || fail "unrecognized argument '${bad}' should fail but exited 0."
   assert_contains "bad arg '${bad}'" "${out}" 'unexpected argument'
 done
+
+## No explicit level: resolve from the drop-in config / cmdline. A fake cmdline
+## file is injected so the test does not depend on the host's real /proc/cmdline.
+tmp_cmdline="$(mktemp -t rs-parse-cmdline.XXXXXX)"
+cleanup() {
+  safe-rm --force -- "${tmp_cmdline}"
+}
+trap cleanup EXIT
+
+## No drop-in config readable (HELPER_SCRIPTS_PATH points nowhere) and no
+## 'noremountsecure' token -> the hardcoded default level 3.
+printf '%s\n' 'BOOT_IMAGE=/vmlinuz ro quiet' > "${tmp_cmdline}"
+out="$(HELPER_SCRIPTS_PATH=/nonexistent remount_secure_cmdline_file="${tmp_cmdline}" \
+  bash -- "${rs_bin}" --check 2>&1 || true)"
+assert_contains 'no-config default' "${out}" 'INFO: level 3/3'
+
+## 'noremountsecure' on the kernel command line is a debug off-switch (level 0,
+## exit 0), overriding the drop-in level.
+printf '%s\n' 'BOOT_IMAGE=/vmlinuz noremountsecure ro quiet' > "${tmp_cmdline}"
+rc=0
+out="$(HELPER_SCRIPTS_PATH=/nonexistent remount_secure_cmdline_file="${tmp_cmdline}" \
+  bash -- "${rs_bin}" --check 2>&1)" || rc=$?
+[ "${rc}" -eq 0 ] || fail "noremountsecure --check should exit 0, got ${rc}."
+assert_contains 'noremountsecure' "${out}" 'Not using remount-secure'
 
 printf '%s\n' "PASS: remount-secure option parsing / level resolution"
