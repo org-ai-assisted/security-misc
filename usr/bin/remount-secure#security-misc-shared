@@ -177,9 +177,16 @@ parse_options() {
    if [ "${parsed}" = 'true' ]; then
       level_to_mount_options "${level_arg}"
    else
-      local effective_level
-      effective_level="$(resolve_effective_level)"
-      level_to_mount_options "${effective_level}"
+      ## Resolve in the MAIN shell (NOT a '$()' subshell) so a drop-in '*.conf'
+      ## sourced during level resolution can also redefine the mount-helper
+      ## functions (e.g. '_opt', '_home') before the dispatch below runs, letting
+      ## an admin customize per-mountpoint options. Side effects are intentional
+      ## here; a broken root-authored drop-in can therefore abort the run (the
+      ## accepted tradeoff of function override). stdout (the printed level) is
+      ## discarded -- a redirect, not a pipe, so no subshell -- and the resolved
+      ## value is read from the global 'remount_secure_effective_level'.
+      resolve_effective_level >/dev/null
+      level_to_mount_options "${remount_secure_effective_level}"
       parsed='true'
    fi
 
@@ -493,6 +500,11 @@ remount_secure_cmdline_file="${remount_secure_cmdline_file:-/proc/cmdline}"
 ## '_home'/'_tmp'/... markers; created only on the real remount path, never by
 ## '--check' (the audit must not write).
 remount_secure_runtime_dir="${remount_secure_runtime_dir:-/run/remount-secure}"
+## Internal: the level actually enforced this run. Set by resolve_effective_level
+## (both the 'noremountsecure' cmdline off-switch and the drop-in path), so the
+## real-run path can read it WITHOUT a '$()' subshell and thereby keep any
+## function/variable overrides a drop-in made while it was sourced.
+remount_secure_effective_level=''
 
 read_dropin_level() {
    ## Print the drop-in-configured level (0-3); defaults to
@@ -513,6 +525,7 @@ read_dropin_level() {
          ## leave partial or inconsistent state in both remount_secure_level and
          ## remount_secure_default_level (fragments are sourced into this shell),
          ## so derive the fallback from neither: emit the literal and return.
+         remount_secure_effective_level=3
          printf '%s\n' 3
          return 0
       fi
@@ -526,6 +539,7 @@ read_dropin_level() {
          level="${remount_secure_default_level}"
          ;;
    esac
+   remount_secure_effective_level="${level}"
    printf '%s\n' "${level}"
 }
 
@@ -542,6 +556,7 @@ resolve_effective_level() {
    fi
    case " ${cmdline} " in
       *" noremountsecure "*)
+         remount_secure_effective_level=0
          printf '%s\n' 0
          return 0
          ;;

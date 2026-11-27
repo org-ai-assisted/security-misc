@@ -62,6 +62,11 @@ jobs:
       - name: remount-secure runtime-dir regression test
         run: ci/tests/remount_secure/test_runtime_dir.sh
 
+      ## Drop-in function override (a '*.conf' may redefine a mount-helper to
+      ## customize that mountpoint's options); stubs id/findmnt/mount/source_config.
+      - name: remount-secure function-override regression test
+        run: ci/tests/remount_secure/test_function_override.sh
+
       ## ubuntu-24.04 runners restrict unprivileged user namespaces via AppArmor,
       ## which the check-no-write test needs to simulate root. Lift the restriction
       ## where the knob exists; a no-op on kernels without it.
