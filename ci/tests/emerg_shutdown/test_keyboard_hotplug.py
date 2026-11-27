@@ -110,7 +110,7 @@ class LineReader:
 
     def __init__(self, stream):
         self._stream = stream
-        self._q = queue.Queue()
+        self._q: queue.Queue[str | None] = queue.Queue()
         self._lines = []
         self._thread = threading.Thread(target=self._pump, daemon=True)
         self._thread.start()
@@ -361,6 +361,53 @@ def scenario_hotplug_held_keys(bin_path, cap, UInput, e):
                 dev.close()
 
 
+def scenario_startup_held_combo(bin_path, cap, UInput, e):
+    """A keyboard present and holding the full panic combo before emerg-shutdown
+    starts triggers a shutdown.
+
+    Integration coverage for the startup path: the device is caught by startup
+    enumeration, its bitmap is seeded from EVIOCGKEY, and the combo fires end to
+    end. NOT a strict red-on-old canary: the held keys autorepeat, so a build
+    WITHOUT the startup derive+check still wakes from poll() on a repeat event
+    and fires via the once-per-iteration derive (confirmed empirically). The
+    startup check matters for the case uinput cannot reproduce here - a held
+    combo whose keys do not autorepeat (e.g. KEY_POWER), where poll(-1) would
+    otherwise block forever; that guarantee rests on the structural fix (a
+    derive+check before the first poll), not on this scenario."""
+    kbd = None
+    proc = None
+    try:
+        ## Device present and holding the whole combo BEFORE the daemon starts.
+        kbd = UInput(cap, name="emerg-shutdown-test-startup-held")
+        for key in PANIC_COMBO_KEYS:
+            kbd.write(e.EV_KEY, getattr(e, key), 1)
+        kbd.syn()
+
+        proc = subprocess.Popen(
+            [bin_path, "--debug", "--keys=" + PANIC_KEYS],
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        reader = LineReader(proc.stderr)
+
+        if not reader.wait_for("panic key combo", STEP_TIMEOUT):
+            fail("a combo held on a keyboard present at startup did not trigger "
+                 "a shutdown; the startup seed+check before poll() is missing.\n"
+                 "--- emerg-shutdown output ---\n" + reader.text)
+        try:
+            rc = proc.wait(timeout=STEP_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            fail("emerg-shutdown did not exit after the panic key combo.")
+        if rc != 0:
+            fail("emerg-shutdown exited %d, expected 0 (debug would-kill).\n"
+                 "--- emerg-shutdown output ---\n%s" % (rc, reader.text))
+        print("PASS: combo held at startup triggered shutdown.")
+    finally:
+        if proc is not None and proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        if kbd is not None:
+            kbd.close()
+
+
 def main():
     if os.geteuid() != 0:
         fail("must run as root (needs /dev/uinput and to run emerg-shutdown).")
@@ -398,6 +445,7 @@ def main():
         scenario_hotplug(bin_path, cap, UInput, e)
         scenario_survive_unrelated_unplug(bin_path, cap, UInput, e)
         scenario_hotplug_held_keys(bin_path, cap, UInput, e)
+        scenario_startup_held_combo(bin_path, cap, UInput, e)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 

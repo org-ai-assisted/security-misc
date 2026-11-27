@@ -541,6 +541,22 @@ void ignore_signals(bool also_sigterm) {
 }
 
 /*
+ * Load one device's held-key bitmap from kernel ground truth (EVIOCGKEY). Used
+ * to seed a freshly opened device, and to resync after SYN_DROPPED (an evdev
+ * queue overflow drops events, so the bitmap can no longer be maintained from
+ * the stream). EVIOCGKEY flushes the fd's pending EV_KEY events; that is correct
+ * in both callers - a new device whose events we have not started reading, and a
+ * post-overflow device whose queued events are already unreliable and whose net
+ * effect this snapshot supersedes. On failure the state is zeroed (fail toward
+ * no false combo).
+ */
+static void reseed_key_state(int fd, uint64_t *key_state) {
+  if (ioctl(fd, EVIOCGKEY(key_flags_len * sizeof(uint64_t)), key_state) < 0) {
+    memset(key_state, 0, key_flags_len * sizeof(uint64_t));
+  }
+}
+
+/*
  * Probe an input device node. If it is a keyboard that supports every
  * configured panic key group, open it and append its fd, path and seeded
  * held-key bitmap to the monitored lists. Returns:
@@ -652,10 +668,7 @@ int register_input_device(const char *input_path, bool debug_mode,
    * bitmap is maintained purely from the device's own event stream.
    */
   key_state_copy = safe_calloc(key_flags_len, sizeof(uint64_t));
-  if (ioctl(tmp_fd, EVIOCGKEY(key_flags_len * sizeof(uint64_t)),
-    key_state_copy) < 0) {
-    memset(key_state_copy, 0, key_flags_len * sizeof(uint64_t));
-  }
+  reseed_key_state(tmp_fd, key_state_copy);
 
   (*event_fd_list_len)++;
   *event_fd_list = safe_reallocarray(*event_fd_list, *event_fd_list_len, sizeof(int));
@@ -719,9 +732,10 @@ void enumerate_input_devices(bool debug_mode, size_t panic_key_list_len,
 
 /*
  * Power the system off (or, in debug mode, print and exit 0) if every panic key
- * group is currently active. Called both from the per-event loop and after a
- * device-set change re-derives the active state, so a combo completed by a
- * hotplugged or surviving keyboard is not missed.
+ * group is currently active. Called once at startup and once per poll iteration
+ * after derive_panic_state refreshes the active state from a single consistent
+ * snapshot, so a combo completed by a key event, a hotplug, or a device drop is
+ * not missed.
  */
 void check_panic_combo(bool debug_mode, size_t panic_key_list_len,
   const bool *panic_key_active_list) {
@@ -1061,6 +1075,17 @@ void hw_monitor(int argc, char **argv) {
     print(fd_stderr, "DEBUG: Set up poll fds\n");
   }
 
+  /*
+   * A panic combo may already be fully held at startup: the keys were down
+   * before the daemon opened the devices, so no EV_KEY press event will ever
+   * arrive for them. register seeded each device's bitmap from EVIOCGKEY, so
+   * derive and check that seeded state once before blocking in poll() - without
+   * this an already-held combo would never fire (poll() would wait forever).
+   */
+  derive_panic_state(event_fd_list_len, event_fd_list, event_key_state_list,
+    panic_key_list_len, panic_key_list, panic_key_active_list);
+  check_panic_combo(debug_mode, panic_key_list_len, panic_key_active_list);
+
   /* Event loop */
   for (;;) {
     /*
@@ -1133,6 +1158,22 @@ void hw_monitor(int argc, char **argv) {
       ie_max_idx = (size_t)ieread_bytes / sizeof(struct input_event);
       assert(ie_max_idx < INT_MAX);
       for (ie_idx = 0; ie_idx < (int)(ie_max_idx); ie_idx++) {
+        if (ie_buf[ie_idx].type == EV_SYN) {
+          /*
+           * SYN_DROPPED means the kernel overflowed this fd's event queue and
+           * discarded events, so a release could be lost and leave a key stuck
+           * 'held' in the bitmap (a false combo later). Resync this device from
+           * kernel ground truth and stop reading this batch: the resync already
+           * reflects the net state of every event the kernel processed, so the
+           * unreliable remainder adds nothing.
+           */
+          if (ie_buf[ie_idx].code == SYN_DROPPED) {
+            reseed_key_state(event_fd_list[efl_idx],
+              event_key_state_list[efl_idx]);
+            break;
+          }
+          continue;
+        }
         if (ie_buf[ie_idx].type != EV_KEY) {
           continue;
         }
@@ -1141,21 +1182,17 @@ void hw_monitor(int argc, char **argv) {
          * press/autorepeat (value != 0) sets the key, release (value 0) clears
          * it. Codes at or beyond the bitmap width are never panic keys (every
          * panic key comes from key_table, below KEY_UNKNOWN), so skipping them
-         * is safe and keeps the index in bounds.
+         * is safe and keeps the index in bounds. The combo is derived and
+         * checked ONCE per poll iteration (end of the loop), not per event, so
+         * every ready device's events are applied to one consistent snapshot
+         * before the check - never combined with another device's not-yet-read
+         * (stale) state, and never using a dropped device still awaiting its
+         * POLLHUP.
          */
         if (ie_buf[ie_idx].code < key_flags_len * 64) {
           bitset_set(event_key_state_list[efl_idx], ie_buf[ie_idx].code,
             ie_buf[ie_idx].value != 0);
         }
-        /*
-         * Re-derive the per-group active state from every surviving device's
-         * bitmap (one consistent in-memory snapshot) and test the combo after
-         * each event, so the exact event that completes the combo triggers it.
-         */
-        derive_panic_state(event_fd_list_len, event_fd_list,
-          event_key_state_list, panic_key_list_len, panic_key_list,
-          panic_key_active_list);
-        check_panic_combo(debug_mode, panic_key_list_len, panic_key_active_list);
       }
     }
 
@@ -1441,23 +1478,25 @@ netlink_done:
       }
 
       rebuild_pollfd(&pollfd_list, event_fd_list_len, event_fd_list, ns, inotify_fd);
-
-      /*
-       * The monitored set changed (device added and/or dropped). Re-derive the
-       * active panic-key state from the surviving devices' per-device bitmaps:
-       * - a dropped device (now gone) no longer contributes its held keys;
-       * - a key still held on a surviving device stays set;
-       * - a hotplugged device already holding a key contributes it (its bitmap
-       *   was seeded from the kernel once at registration).
-       * This reads only in-memory state, so unlike an EVIOCGKEY resync it never
-       * flushes any surviving device's unread events and never combines state
-       * sampled at different instants. Re-check the combo afterwards: the
-       * re-derivation may complete it without a further key event arriving.
-       */
-      derive_panic_state(event_fd_list_len, event_fd_list, event_key_state_list,
-        panic_key_list_len, panic_key_list, panic_key_active_list);
-      check_panic_combo(debug_mode, panic_key_list_len, panic_key_active_list);
     }
+
+    /*
+     * One consistent snapshot per poll iteration. By here every ready device's
+     * events have been drained into its own bitmap, any dropped device is
+     * tombstoned and compacted out, and any hotplugged device is seeded. Derive
+     * the per-group active state from all surviving devices at this single
+     * instant and check the combo once:
+     * - deriving per event (mid-drain) combined a fresh event with other
+     *   devices' not-yet-read state - a cross-time snapshot that could fire a
+     *   false combo or miss a real one;
+     * - a dropped device no longer contributes (tombstone skipped / compacted);
+     * - a key still held on a surviving device stays set, and a hotplugged
+     *   device already holding a key contributes its seed, so a combo completed
+     *   by a device-set change alone (no further key event) still fires.
+     */
+    derive_panic_state(event_fd_list_len, event_fd_list, event_key_state_list,
+      panic_key_list_len, panic_key_list, panic_key_active_list);
+    check_panic_combo(debug_mode, panic_key_list_len, panic_key_active_list);
   }
 
   print(fd_stderr, "Hardware monitor poll gave up!\n");

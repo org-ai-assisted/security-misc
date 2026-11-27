@@ -24,17 +24,23 @@
  */
 #define key_flags_len 12
 
-/* Adapted from systemd/src/login/logind-button.c */
+/*
+ * Adapted from systemd/src/login/logind-button.c. The shift constant is
+ * UINT64_C(1), never 1UL: the bitmap word is uint64_t, but unsigned long is
+ * 32-bit on ILP32 (i386, armhf), where '1UL << (i % 64)' is undefined for a
+ * shift >= 32 and '~(1UL << ...)' zero-extends and wipes the word's upper 32
+ * bits. Key codes reach 194 (KEY_F24), so this is reachable, not theoretical.
+ */
 static inline bool bitset_get(const uint64_t *bits, uint32_t i) {
-  return (bits[i / 64] >> (i % 64)) & 1UL;
+  return (bits[i / 64] >> (i % 64)) & UINT64_C(1);
 }
 
 /* Set (value true) or clear (value false) bit i in a key-state bitmap. */
 static inline void bitset_set(uint64_t *bits, uint32_t i, bool value) {
   if (value) {
-    bits[i / 64] |= (1UL << (i % 64));
+    bits[i / 64] |= (UINT64_C(1) << (i % 64));
   } else {
-    bits[i / 64] &= ~(1UL << (i % 64));
+    bits[i / 64] &= ~(UINT64_C(1) << (i % 64));
   }
 }
 

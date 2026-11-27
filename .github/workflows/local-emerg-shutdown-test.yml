@@ -63,3 +63,32 @@ jobs:
       - name: Keyboard hotplug regression test
         ## Root: needs /dev/uinput and must run emerg-shutdown (root-only).
         run: sudo -E ci/tests/emerg_shutdown/test_keyboard_hotplug.py
+
+  static-proofs:
+    name: emerg-shutdown static proofs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    if: >-
+      vars.CI_ENABLED_ORG_AI_ASSISTED == 'true'
+      && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      ## gcc compiles the pure panic-state unit test; cbmc runs the proofs and
+      ## canaries; gcc-multilib provides the 32-bit libc headers 'cbmc --32'
+      ## needs for the ILP32 bitset-width proof; the harness cleanup uses
+      ## safe-rm.
+      - name: Install gcc + cbmc + safe-rm
+        uses: org-ai-assisted/developer-meta-files/.github/actions/install-deps@master
+        with:
+          apt-packages: 'gcc gcc-multilib cbmc safe-rm'
+
+      ## Pure panic-state unit test + CBMC proofs and canaries (incl. the 32-bit
+      ## bitset-width proof). No root, no uinput, no kernel module.
+      - name: Panic-state unit test + CBMC proofs
+        run: ci/tests/emerg_shutdown/run-static-tests.sh
