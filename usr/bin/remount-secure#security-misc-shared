@@ -331,7 +331,6 @@ _boot() {
 }
 
 _boot_efi() {
-   ## TODO: new, test
    mount_folder="${NEWROOT}/boot/efi"
    intended_mount_options="nosuid,nodev,noexec"
    remount_secure
@@ -359,7 +358,6 @@ _dev_shm() {
 }
 
 _sys() {
-   ## TODO: new, test
    mount_folder="/sys"
    intended_mount_options="nosuid,nodev,noexec"
    remount_secure
@@ -401,7 +399,6 @@ _var() {
 }
 
 _usr() {
-   ## TODO: new, test
    mount_folder="${NEWROOT}/usr"
    intended_mount_options="nodev"
    remount_secure
@@ -414,35 +411,30 @@ _home() {
 }
 
 _root() {
-   ## TODO: new, test
    mount_folder="${NEWROOT}/root"
    intended_mount_options="nosuid,nodev${home_noexec_maybe}"
    remount_secure
 }
 
 _srv() {
-   ## TODO: new, test
    mount_folder="${NEWROOT}/srv"
    intended_mount_options="nosuid,nodev${most_noexec_maybe}"
    remount_secure
 }
 
 _media() {
-   ## TODO: new, test
    mount_folder="${NEWROOT}/media"
    intended_mount_options="nosuid,nodev${most_noexec_maybe}"
    remount_secure
 }
 
 _mnt() {
-   ## TODO: new, test
    mount_folder="${NEWROOT}/mnt"
    intended_mount_options="nosuid,nodev${most_noexec_maybe}"
    remount_secure
 }
 
 _opt() {
-   ## TODO: new, test
    mount_folder="${NEWROOT}/opt"
    ## Allow /opt exec as usually optional binaries are placed there such as Firefox
    ## when manually installed from tarball.
@@ -451,7 +443,6 @@ _opt() {
 }
 
 _etc() {
-   ## TODO: new, test
    ## /etc cannot be noexec because various executables are there. To find, run:
    ## sudo find /etc -executable
    mount_folder="${NEWROOT}/etc"
