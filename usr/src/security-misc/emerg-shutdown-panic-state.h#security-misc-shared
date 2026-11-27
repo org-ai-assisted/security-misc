@@ -1,0 +1,79 @@
+/*
+ * Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+ * See the file COPYING for copying conditions.
+ */
+
+/*
+ * Pure panic-key state primitives shared by emerg-shutdown.c and its CBMC and
+ * unit harnesses, so the tested logic is the exact code that ships (no copy to
+ * drift). No syscalls and no kernel headers: operates only on in-memory evdev
+ * key bitmaps.
+ */
+
+#ifndef EMERG_SHUTDOWN_PANIC_STATE_H
+#define EMERG_SHUTDOWN_PANIC_STATE_H
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+
+/*
+ * evdev key-state bitmap width in 64-bit words: ceil(KEY_CNT / 64). KEY_CNT is
+ * 0x300 (768) on current kernels, so 12 words cover every key code EVIOCGKEY
+ * can report.
+ */
+#define key_flags_len 12
+
+/* Adapted from systemd/src/login/logind-button.c */
+static inline bool bitset_get(const uint64_t *bits, uint32_t i) {
+  return (bits[i / 64] >> (i % 64)) & 1UL;
+}
+
+/* Set (value true) or clear (value false) bit i in a key-state bitmap. */
+static inline void bitset_set(uint64_t *bits, uint32_t i, bool value) {
+  if (value) {
+    bits[i / 64] |= (1UL << (i % 64));
+  } else {
+    bits[i / 64] &= ~(1UL << (i % 64));
+  }
+}
+
+/*
+ * Derive panic_key_active_list from the per-device held-key bitmaps of the
+ * still-monitored devices. The active-key state is a global OR across
+ * keyboards: a group is active if any surviving device holds any key in it.
+ * The bitmaps are a single in-memory snapshot maintained from each device's
+ * event stream (seeded once at registration), so this never queries the kernel
+ * and never flushes any device's event queue, and it combines no state sampled
+ * at different instants. A tombstoned device (fd -1) contributes nothing, so a
+ * dropped device's held keys clear as soon as it is tombstoned - before any
+ * further combo check in the same iteration.
+ */
+static inline void derive_panic_state(size_t event_fd_list_len,
+  const int *event_fd_list, uint64_t *const *event_key_state_list,
+  size_t panic_key_list_len, uint32_t **panic_key_list,
+  bool *panic_key_active_list) {
+  size_t efl_idx = 0;
+  size_t pkl_idx = 0;
+  size_t kg_idx = 0;
+
+  for (pkl_idx = 0; pkl_idx < panic_key_list_len; pkl_idx++) {
+    panic_key_active_list[pkl_idx] = false;
+  }
+
+  for (efl_idx = 0; efl_idx < event_fd_list_len; efl_idx++) {
+    if (event_fd_list[efl_idx] < 0) {
+      continue;
+    }
+    for (pkl_idx = 0; pkl_idx < panic_key_list_len; pkl_idx++) {
+      for (kg_idx = 0; panic_key_list[pkl_idx][kg_idx] != 0; kg_idx++) {
+        if (bitset_get(event_key_state_list[efl_idx],
+          panic_key_list[pkl_idx][kg_idx])) {
+          panic_key_active_list[pkl_idx] = true;
+        }
+      }
+    }
+  }
+}
+
+#endif /* EMERG_SHUTDOWN_PANIC_STATE_H */

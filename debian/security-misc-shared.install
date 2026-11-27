@@ -152,6 +152,7 @@ usr/share/security-misc/lkrg/lkrg-virtualbox#security-misc-shared => /usr/share/
 usr/share/security-misc/permission-hardener-existing-mode-legacy-hardcoded#security-misc-shared => /usr/share/security-misc/permission-hardener-existing-mode-legacy-hardcoded
 usr/share/security-misc/permission-hardener-new-mode-legacy-hardcoded#security-misc-shared => /usr/share/security-misc/permission-hardener-new-mode-legacy-hardcoded
 usr/share/security-misc/security-misc-memlockd.cfg#security-misc-shared => /usr/share/security-misc/security-misc-memlockd.cfg
+usr/src/security-misc/emerg-shutdown-panic-state.h#security-misc-shared => /usr/src/security-misc/emerg-shutdown-panic-state.h
 usr/src/security-misc/emerg-shutdown.c#security-misc-shared => /usr/src/security-misc/emerg-shutdown.c
 usr/src/security-misc/fm-shim-backend.c#security-misc-shared => /usr/src/security-misc/fm-shim-backend.c
 var/cache/security-misc/state-files/placeholder#security-misc-shared => /var/cache/security-misc/state-files/placeholder

@@ -50,6 +50,9 @@ REPO_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
 DEFAULT_SRC = os.path.join(
     REPO_ROOT, "usr/src/security-misc/emerg-shutdown.c#security-misc-shared")
+DEFAULT_HEADER = os.path.join(
+    REPO_ROOT,
+    "usr/src/security-misc/emerg-shutdown-panic-state.h#security-misc-shared")
 COMPILE_HELPER = os.path.join(
     REPO_ROOT,
     "usr/libexec/security-misc/compile-emerg-shutdown#security-misc-shared")
@@ -86,6 +89,13 @@ def compile_binary(workdir):
     ## (same trick as ci/codeql-prepare.sh).
     clean_src = os.path.join(workdir, "emerg-shutdown.c")
     os.symlink(os.path.abspath(src), clean_src)
+    ## The daemon #includes its panic-state header by clean name. The symlink
+    ## that gives gcc a '.c' extension also hides the real '#tag'-suffixed
+    ## sibling, so expose the header under its clean name next to clean_src.
+    header = os.environ.get("EMERG_SHUTDOWN_HEADER", DEFAULT_HEADER)
+    if os.path.isfile(header):
+        os.symlink(os.path.abspath(header),
+                   os.path.join(workdir, "emerg-shutdown-panic-state.h"))
     out_bin = os.path.join(workdir, "emerg-shutdown")
     proc = subprocess.run(
         ["bash", COMPILE_HELPER, clean_src, out_bin],
@@ -294,6 +304,63 @@ def scenario_survive_unrelated_unplug(bin_path, cap, UInput, e):
                 dev.close()
 
 
+def scenario_hotplug_held_keys(bin_path, cap, UInput, e):
+    """A keyboard hotplugged while ALREADY holding the full panic combo triggers
+    a shutdown. Exercises the per-device key-state seed: at registration
+    emerg-shutdown reads the device's held keys once (EVIOCGKEY), so a combo
+    held before the device was monitored still counts without any later event.
+
+    NOT a strict canary: the press and emerg-shutdown's inotify registration
+    race, so a seed-less binary can still catch the keys as ordinary events when
+    the press lands after registration. The CBMC proof (cbmc/) is the rigorous
+    guarantee for the state-derivation logic; this is integration coverage that
+    the seed-and-fire path works end to end through real uinput + evdev."""
+    kbd_a = None
+    kbd_b = None
+    proc = None
+    try:
+        kbd_a = UInput(cap, name="emerg-shutdown-test-seed-a")
+        proc = subprocess.Popen(
+            [bin_path, "--debug", "--keys=" + PANIC_KEYS],
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        reader = LineReader(proc.stderr)
+        mark_a = "Device '%s' supports all panic key groups" % kbd_a.device.path
+        if not reader.wait_for(mark_a, STEP_TIMEOUT):
+            fail("emerg-shutdown never registered the startup keyboard.\n"
+                 "--- emerg-shutdown output ---\n" + reader.text)
+        if not reader.wait_for("Set up poll fds", STEP_TIMEOUT):
+            fail("emerg-shutdown never finished startup enumeration.\n"
+                 "--- emerg-shutdown output ---\n" + reader.text)
+
+        ## Create the hotplug keyboard with every panic key already held, so the
+        ## combo is down before emerg-shutdown registers it. The registration
+        ## key-state seed must pick the held keys up and fire the combo.
+        kbd_b = UInput(cap, name="emerg-shutdown-test-seed-b")
+        for key in PANIC_COMBO_KEYS:
+            kbd_b.write(e.EV_KEY, getattr(e, key), 1)
+        kbd_b.syn()
+
+        if not reader.wait_for("panic key combo", STEP_TIMEOUT):
+            fail("a keyboard hotplugged while holding the full combo did not "
+                 "trigger a shutdown; the registration key-state seed is "
+                 "broken.\n--- emerg-shutdown output ---\n" + reader.text)
+        try:
+            rc = proc.wait(timeout=STEP_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            fail("emerg-shutdown did not exit after the panic key combo.")
+        if rc != 0:
+            fail("emerg-shutdown exited %d, expected 0 (debug would-kill).\n"
+                 "--- emerg-shutdown output ---\n%s" % (rc, reader.text))
+        print("PASS: keyboard hotplugged holding the combo triggered shutdown.")
+    finally:
+        if proc is not None and proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        for dev in (kbd_a, kbd_b):
+            if dev is not None:
+                dev.close()
+
+
 def main():
     if os.geteuid() != 0:
         fail("must run as root (needs /dev/uinput and to run emerg-shutdown).")
@@ -330,6 +397,7 @@ def main():
     try:
         scenario_hotplug(bin_path, cap, UInput, e)
         scenario_survive_unrelated_unplug(bin_path, cap, UInput, e)
+        scenario_hotplug_held_keys(bin_path, cap, UInput, e)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 

@@ -98,6 +98,8 @@
 #include <limits.h>
 #include <assert.h>
 
+#include "emerg-shutdown-panic-state.h"
+
 //#define fd_stdin 0
 //#define fd_stdout 1
 #define fd_stderr 2
@@ -109,7 +111,6 @@
 /* "/dev/input/" + a hotplugged device node name. Generous upper bound; names
  * reported by inotify for /dev/input are short ("eventN", "mouseN", ...). */
 #define hotplug_path_size 80
-#define key_flags_len 12
 
 #define hw_monitor_val 1
 #define fifo_monitor_val 2
@@ -277,11 +278,6 @@ uint32_t lookup_keycode(const char *name) {
   return 0;
 }
 
-/* Adapted from systemd/src/login/logind-button.c */
-bool bitset_get(const uint64_t *bits, uint32_t i) {
-  return (bits[i / 64] >> (i % 64)) & 1UL;
-}
-
 void print(int fd, const char *str) {
   size_t len = strlen(str);
   while (len > 0) {
@@ -348,6 +344,24 @@ void *safe_reallocarray(void *ptr, size_t nmemb, size_t size) {
   return ret_buf;
 }
 
+/*
+ * Build "<prefix><name>" into dst (dst_size bytes, NUL terminated). Returns
+ * false, leaving dst untouched, if it would not fit. stdio is unavailable here
+ * (static glibc), so this bounds the copy explicitly with memcpy rather than
+ * snprintf.
+ */
+bool path_concat(char *dst, size_t dst_size, const char *prefix,
+  const char *name) {
+  size_t prefix_len = strlen(prefix);
+  size_t name_len = strlen(name);
+  if (prefix_len + name_len + 1 > dst_size) {
+    return false;
+  }
+  memcpy(dst, prefix, prefix_len);
+  memcpy(dst + prefix_len, name, name_len + 1);
+  return true;
+}
+
 /* Inspired by https://www.strudel.org.uk/itoa/ */
 char *int_to_str(uint32_t val) {
   static char buf[11];
@@ -399,7 +413,7 @@ void load_list(const char *arg, size_t *result_list_len_ref, char ***result_list
     result_list_len++;
     result_list = safe_reallocarray(result_list, result_list_len, sizeof(char *));
     result_list[result_list_len - 1] = safe_calloc(1, strlen(arg_part) + 1);
-    strcpy(result_list[result_list_len - 1], arg_part);
+    memcpy(result_list[result_list_len - 1], arg_part, strlen(arg_part) + 1);
   } while ((arg_part = strtok(NULL, sep)) != NULL);
 
   *result_list_len_ref = result_list_len;
@@ -528,8 +542,8 @@ void ignore_signals(bool also_sigterm) {
 
 /*
  * Probe an input device node. If it is a keyboard that supports every
- * configured panic key group, open it and append its fd and path to the
- * monitored lists. Returns:
+ * configured panic key group, open it and append its fd, path and seeded
+ * held-key bitmap to the monitored lists. Returns:
  *   1  = registered
  *   0  = not a match (cannot open, already monitored, not a keyboard, or
  *        lacks a configured panic key group)
@@ -540,13 +554,15 @@ void ignore_signals(bool also_sigterm) {
 int register_input_device(const char *input_path, bool debug_mode,
   size_t panic_key_list_len, uint32_t **panic_key_list,
   char **panic_key_str_list, size_t *event_fd_list_len,
-  int **event_fd_list, char ***event_path_list) {
+  int **event_fd_list, char ***event_path_list,
+  uint64_t ***event_key_state_list) {
   int tmp_fd = 0;
   uint64_t key_flags[key_flags_len];
   size_t pkl_idx = 0;
   size_t kg_idx = 0;
   size_t dup_idx = 0;
   char *path_copy = NULL;
+  uint64_t *key_state_copy = NULL;
 
   /* Skip devices we already monitor (a hotplug event can race startup
    * enumeration, or fire more than once). Entries tombstoned (NULL) earlier in
@@ -625,11 +641,29 @@ int register_input_device(const char *input_path, bool debug_mode,
   path_copy = safe_calloc(1, strlen(input_path) + 1);
   memcpy(path_copy, input_path, strlen(input_path) + 1);
 
+  /*
+   * Seed this device's held-key bitmap once, from kernel ground truth, so keys
+   * already held when the device appears contribute to the panic state (no
+   * EV_KEY event is delivered for a key that was already down before we opened
+   * the device). EVIOCGKEY flushes the queried fd's pending EV_KEY events, but
+   * that is harmless here: this is a freshly opened device whose events we have
+   * not started reading. Already-monitored (surviving) devices are NEVER
+   * re-queried, so their event queues are never flushed. From here on the
+   * bitmap is maintained purely from the device's own event stream.
+   */
+  key_state_copy = safe_calloc(key_flags_len, sizeof(uint64_t));
+  if (ioctl(tmp_fd, EVIOCGKEY(key_flags_len * sizeof(uint64_t)),
+    key_state_copy) < 0) {
+    memset(key_state_copy, 0, key_flags_len * sizeof(uint64_t));
+  }
+
   (*event_fd_list_len)++;
   *event_fd_list = safe_reallocarray(*event_fd_list, *event_fd_list_len, sizeof(int));
   *event_path_list = safe_reallocarray(*event_path_list, *event_fd_list_len, sizeof(char *));
+  *event_key_state_list = safe_reallocarray(*event_key_state_list, *event_fd_list_len, sizeof(uint64_t *));
   (*event_fd_list)[*event_fd_list_len - 1] = tmp_fd;
   (*event_path_list)[*event_fd_list_len - 1] = path_copy;
+  (*event_key_state_list)[*event_fd_list_len - 1] = key_state_copy;
   return 1;
 }
 
@@ -646,6 +680,7 @@ int register_input_device(const char *input_path, bool debug_mode,
 void enumerate_input_devices(bool debug_mode, size_t panic_key_list_len,
   uint32_t **panic_key_list, char **panic_key_str_list,
   size_t *event_fd_list_len, int **event_fd_list, char ***event_path_list,
+  uint64_t ***event_key_state_list,
   bool fatal_on_query_error, bool *devices_changed) {
   DIR *input_dir = opendir("/dev/input");
   struct dirent *dir_entry = NULL;
@@ -662,14 +697,14 @@ void enumerate_input_devices(bool debug_mode, size_t panic_key_list_len,
     if (strncmp(dir_entry->d_name, "event", strlen("event")) != 0) {
       continue;
     }
-    if (strlen("/dev/input/") + strlen(dir_entry->d_name) + 1 > sizeof(path_buf)) {
+    if (!path_concat(path_buf, sizeof(path_buf), "/dev/input/",
+      dir_entry->d_name)) {
       continue;
     }
-    strcpy(path_buf, "/dev/input/");
-    strcat(path_buf, dir_entry->d_name);
     register_result = register_input_device(path_buf, debug_mode,
       panic_key_list_len, panic_key_list, panic_key_str_list,
-      event_fd_list_len, event_fd_list, event_path_list);
+      event_fd_list_len, event_fd_list, event_path_list,
+      event_key_state_list);
     if (register_result == -1 && fatal_on_query_error) {
       closedir(input_dir);
       exit(1);
@@ -680,47 +715,6 @@ void enumerate_input_devices(bool debug_mode, size_t panic_key_list_len,
   }
 
   closedir(input_dir);
-}
-
-/*
- * Re-derive panic_key_active_list from the real current key state of the still
- * monitored devices. The active-key state is a global OR across keyboards, so
- * when one is unplugged a key still physically held on a surviving keyboard
- * must stay set, while a key held only on the vanished device must clear.
- * Querying EVIOCGKEY (kernel ground truth) on each drop settles both without
- * per-device bookkeeping and without relying on the kernel delivering the
- * vanished device's synthesized teardown key-releases. A tombstoned (fd -1) or
- * unqueryable device contributes nothing.
- */
-void recompute_panic_state(size_t event_fd_list_len, const int *event_fd_list,
-  size_t panic_key_list_len, uint32_t **panic_key_list,
-  bool *panic_key_active_list) {
-  size_t efl_idx = 0;
-  size_t pkl_idx = 0;
-  size_t kg_idx = 0;
-
-  for (pkl_idx = 0; pkl_idx < panic_key_list_len; pkl_idx++) {
-    panic_key_active_list[pkl_idx] = false;
-  }
-
-  for (efl_idx = 0; efl_idx < event_fd_list_len; efl_idx++) {
-    uint64_t key_state[key_flags_len];
-    if (event_fd_list[efl_idx] < 0) {
-      continue;
-    }
-    memset(key_state, 0, sizeof(key_state));
-    if (ioctl(event_fd_list[efl_idx], EVIOCGKEY(sizeof(key_state)),
-      key_state) < 0) {
-      continue;
-    }
-    for (pkl_idx = 0; pkl_idx < panic_key_list_len; pkl_idx++) {
-      for (kg_idx = 0; panic_key_list[pkl_idx][kg_idx] != 0; kg_idx++) {
-        if (bitset_get(key_state, panic_key_list[pkl_idx][kg_idx])) {
-          panic_key_active_list[pkl_idx] = true;
-        }
-      }
-    }
-  }
 }
 
 /*
@@ -783,6 +777,7 @@ void hw_monitor(int argc, char **argv) {
   size_t event_fd_list_len = 0;
   int *event_fd_list = NULL;
   char **event_path_list = NULL;
+  uint64_t **event_key_state_list = NULL;
   struct pollfd *pollfd_list = NULL;
   struct input_event ie_buf[64];
   bool paranoid_mode = false;
@@ -1051,7 +1046,7 @@ void hw_monitor(int argc, char **argv) {
    * kloak/src/main.c */
   enumerate_input_devices(debug_mode, panic_key_list_len, panic_key_list,
     panic_key_str_list, &event_fd_list_len, &event_fd_list, &event_path_list,
-    true, NULL);
+    &event_key_state_list, true, NULL);
 
   /*
    * Running with zero panic-capable keyboards is not fatal: boot-device
@@ -1076,6 +1071,7 @@ void hw_monitor(int argc, char **argv) {
      */
     size_t poll_fd_count = event_fd_list_len;
     bool devices_changed = false;
+    bool device_dropped = false;
     size_t ie_max_idx = 0;
 
     if (poll(pollfd_list, poll_fd_count + 2, -1) == -1) {
@@ -1122,11 +1118,15 @@ void hw_monitor(int argc, char **argv) {
         }
         close(event_fd_list[efl_idx]);
         free(event_path_list[efl_idx]);
+        free(event_key_state_list[efl_idx]);
         event_fd_list[efl_idx] = -1;
         event_path_list[efl_idx] = NULL;
-        /* Panic-key state is re-derived once per iteration below, after every
-         * device's pending events have been read normally. */
+        event_key_state_list[efl_idx] = NULL;
+        /* Tombstoned (fd -1): derive_panic_state skips it immediately, so its
+         * held keys no longer count toward any combo check this iteration. The
+         * entry is compacted out and the poll set rebuilt at end of iteration. */
         devices_changed = true;
+        device_dropped = true;
         continue;
       }
 
@@ -1136,37 +1136,25 @@ void hw_monitor(int argc, char **argv) {
         if (ie_buf[ie_idx].type != EV_KEY) {
           continue;
         }
-
-        for (pkl_idx = 0; pkl_idx < panic_key_list_len; pkl_idx++) {
-          for (kg_idx = 0; panic_key_list[pkl_idx][kg_idx] != 0; kg_idx++) {
-            if (ie_buf[ie_idx].code == panic_key_list[pkl_idx][kg_idx]) {
-              if (debug_mode) {
-                char *keycode_str = int_to_str(ie_buf[ie_idx].code);
-                char *pkl_idx_str = int_to_str((uint32_t)(pkl_idx));
-                print(fd_stderr, "DEBUG: Keycode ");
-                print(fd_stderr, keycode_str);
-                print(fd_stderr, " (part of panic key group ");
-                print(fd_stderr, pkl_idx_str);
-                print(fd_stderr, ") now considered ");
-                free(keycode_str);
-                free(pkl_idx_str);
-              }
-              if (ie_buf[ie_idx].value == 0) {
-                if (debug_mode) {
-                  print(fd_stderr, "released\n");
-                }
-                panic_key_active_list[pkl_idx] = false;
-              } else {
-                if (debug_mode) {
-                  print(fd_stderr, "pressed\n");
-                }
-                panic_key_active_list[pkl_idx] = true;
-              }
-              break; /* only breaks inner loop */
-            }
-          }
+        /*
+         * Maintain this device's held-key bitmap from its own event stream:
+         * press/autorepeat (value != 0) sets the key, release (value 0) clears
+         * it. Codes at or beyond the bitmap width are never panic keys (every
+         * panic key comes from key_table, below KEY_UNKNOWN), so skipping them
+         * is safe and keeps the index in bounds.
+         */
+        if (ie_buf[ie_idx].code < key_flags_len * 64) {
+          bitset_set(event_key_state_list[efl_idx], ie_buf[ie_idx].code,
+            ie_buf[ie_idx].value != 0);
         }
-
+        /*
+         * Re-derive the per-group active state from every surviving device's
+         * bitmap (one consistent in-memory snapshot) and test the combo after
+         * each event, so the exact event that completes the combo triggers it.
+         */
+        derive_panic_state(event_fd_list_len, event_fd_list,
+          event_key_state_list, panic_key_list_len, panic_key_list,
+          panic_key_active_list);
         check_panic_combo(debug_mode, panic_key_list_len, panic_key_active_list);
       }
     }
@@ -1392,12 +1380,12 @@ netlink_done:
           }
           if ((iev->mask & IN_CREATE) && iev->len > 0
             && strncmp(iev->name, "event", strlen("event")) == 0
-            && strlen("/dev/input/") + strlen(iev->name) + 1 <= sizeof(hotplug_path)) {
-            strcpy(hotplug_path, "/dev/input/");
-            strcat(hotplug_path, iev->name);
+            && path_concat(hotplug_path, sizeof(hotplug_path), "/dev/input/",
+              iev->name)) {
             if (register_input_device(hotplug_path, debug_mode,
               panic_key_list_len, panic_key_list, panic_key_str_list,
-              &event_fd_list_len, &event_fd_list, &event_path_list) == 1) {
+              &event_fd_list_len, &event_fd_list, &event_path_list,
+              &event_key_state_list) == 1) {
               devices_changed = true;
             }
           }
@@ -1412,7 +1400,7 @@ netlink_done:
          * unlike startup enumeration. */
         enumerate_input_devices(debug_mode, panic_key_list_len, panic_key_list,
           panic_key_str_list, &event_fd_list_len, &event_fd_list,
-          &event_path_list, false, &devices_changed);
+          &event_path_list, &event_key_state_list, false, &devices_changed);
       }
     }
 
@@ -1432,33 +1420,41 @@ netlink_done:
         }
         event_fd_list[write_idx] = event_fd_list[read_idx];
         event_path_list[write_idx] = event_path_list[read_idx];
+        event_key_state_list[write_idx] = event_key_state_list[read_idx];
         write_idx++;
       }
       event_fd_list_len = write_idx;
+
+      /*
+       * A device was dropped this iteration. Linux can reuse a vanished
+       * device's /dev/input/event<N> node for a different device before its fd
+       * is closed, and a replacement's inotify IN_CREATE can be processed (and
+       * rejected as a path duplicate) before the old device's drop. Now that
+       * the dropped entry is compacted out, re-enumerate so a replacement on a
+       * reused node registers; the dedup still suppresses live devices. A
+       * per-device query error is non-fatal at runtime.
+       */
+      if (device_dropped) {
+        enumerate_input_devices(debug_mode, panic_key_list_len, panic_key_list,
+          panic_key_str_list, &event_fd_list_len, &event_fd_list,
+          &event_path_list, &event_key_state_list, false, NULL);
+      }
+
       rebuild_pollfd(&pollfd_list, event_fd_list_len, event_fd_list, ns, inotify_fd);
 
       /*
        * The monitored set changed (device added and/or dropped). Re-derive the
-       * active panic-key state from the surviving devices' real key state:
-       * - a dropped device's held keys must clear;
-       * - a key still held on a surviving device must stay set;
-       * - a hotplugged device already holding a key must contribute it (only
-       *   state changes are reported as events, so a key down before
-       *   registration is otherwise never seen).
-       * Done here, after every device's pending events were read above, so the
-       * EVIOCGKEY state flush in recompute_panic_state cannot swallow unread
-       * presses. Re-check the combo afterwards: the re-derivation (or the flush)
-       * may complete it without a further key event arriving.
-       *
-       * Residual edge: the read above drains at most 64 events per device per
-       * iteration, so a device that queued >64 events in one iteration where the
-       * monitored set also changed can have its still-unread events flushed by
-       * EVIOCGKEY. This loses only transient press-then-release pairs (a HELD key
-       * is reported by the EVIOCGKEY snapshot, so a held panic combo is never
-       * missed), and requires a device flooding >64 events, so it does not
-       * affect a human-entered panic combo.
+       * active panic-key state from the surviving devices' per-device bitmaps:
+       * - a dropped device (now gone) no longer contributes its held keys;
+       * - a key still held on a surviving device stays set;
+       * - a hotplugged device already holding a key contributes it (its bitmap
+       *   was seeded from the kernel once at registration).
+       * This reads only in-memory state, so unlike an EVIOCGKEY resync it never
+       * flushes any surviving device's unread events and never combines state
+       * sampled at different instants. Re-check the combo afterwards: the
+       * re-derivation may complete it without a further key event arriving.
        */
-      recompute_panic_state(event_fd_list_len, event_fd_list,
+      derive_panic_state(event_fd_list_len, event_fd_list, event_key_state_list,
         panic_key_list_len, panic_key_list, panic_key_active_list);
       check_panic_combo(debug_mode, panic_key_list_len, panic_key_active_list);
     }
