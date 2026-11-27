@@ -357,6 +357,16 @@ _dev_shm() {
    remount_secure
 }
 
+_proc() {
+   mount_folder="/proc"
+   ## Safe subset. procfs has no suid files, no device nodes and no executable regular
+   ## files; /proc/self/exe is a symlink to the real binary, so noexec does not block
+   ## re-exec. hidepid=2,gid=proc is deliberately NOT set here: it breaks pkexec/polkit
+   ## process lookup (the reason proc-hidepid.service stays disabled).
+   intended_mount_options="nosuid,nodev,noexec"
+   remount_secure
+}
+
 _sys() {
    mount_folder="/sys"
    intended_mount_options="nosuid,nodev,noexec"
@@ -615,6 +625,7 @@ main() {
    _run
    _dev
    _dev_shm
+   _proc
    _sys
    _tmp
    _var_tmp
