@@ -1,0 +1,81 @@
+---
+## Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Regression test for 'remount-secure --get-level' / '--set-level', which
+## back the System Maintenance Panel "Exec / Noexec Settings" dialog.
+## See ci/tests/remount_secure/test_set_level.sh.
+
+name: Test remount-secure
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test remount-secure
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    ## CI runs only where we enabled it; ANDed with the existing guard.
+    ## Unset variable -> skipped, no runner, run stays green.
+    if: >-
+      vars.CI_ENABLED_ORG_AI_ASSISTED == 'true'
+      && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      ## The test's cleanup uses safe-rm.
+      - name: Install safe-rm
+        uses: org-ai-assisted/developer-meta-files/.github/actions/install-deps@master
+        with:
+          apt-packages: 'safe-rm'
+
+      ## Root-free and grub-free: the test redirects the managed GRUB drop-in
+      ## to a temp file and stubs 'update-grub' on PATH.
+      - name: remount-secure get/set-level regression test
+        run: ci/tests/remount_secure/test_set_level.sh
+
+      ## Option parsing / level resolution (drop-in default, 'noremountsecure').
+      - name: remount-secure option-parsing regression test
+        run: ci/tests/remount_secure/test_parse_level.sh
+
+      ## Per-login /run/user/<uid> noexec hardening (--runtime-dir); stubs
+      ## id/findmnt/mount, so root-free.
+      - name: remount-secure runtime-dir regression test
+        run: ci/tests/remount_secure/test_runtime_dir.sh
+
+      ## Drop-in function override (a '*.conf' may redefine a mount-helper to
+      ## customize that mountpoint's options); stubs id/findmnt/mount/source_config.
+      - name: remount-secure function-override regression test
+        run: ci/tests/remount_secure/test_function_override.sh
+
+      ## ubuntu-24.04 runners restrict unprivileged user namespaces via AppArmor,
+      ## which the check-no-write test needs to simulate root. Lift the restriction
+      ## where the knob exists; a no-op on kernels without it.
+      - name: Enable unprivileged user namespaces
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl --write kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
+      ## Audit (--check) must not write; simulates root via unprivileged userns.
+      - name: remount-secure check-no-write regression test
+        run: ci/tests/remount_secure/test_check_no_write.sh

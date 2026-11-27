@@ -1,0 +1,65 @@
+remount-secure drop-in configuration
+=====================================
+
+remount-secure reads '*.conf' fragments from, in increasing precedence:
+
+  /etc/remount-secure.d/*.conf           (admin)
+  /usr/local/etc/remount-secure.d/*.conf (local admin, highest precedence)
+
+Fragments are sourced as shell 'key=value'; later files win. Only '*.conf'
+files are read (this README is ignored).
+
+Supported key:
+
+  remount_secure_level=3
+
+Levels:
+
+  0  off (remount-secure no-ops)
+  1  nosuid, nodev
+  2  + noexec for most mount points, except /home
+  3  + noexec including /home (default)
+
+Example - lower to level 2 so executables in /home keep working:
+
+  printf '%s\n' 'remount_secure_level=2' | sudo tee /etc/remount-secure.d/50_local.conf
+
+Or use the helper (writes /etc/remount-secure.d/40_managed.conf):
+
+  sudo remount-secure --set-level 2
+
+A reboot applies the change (or run 'sudo remount-secure --force <level>').
+
+Customizing per-mountpoint options
+----------------------------------
+
+A fragment may also redefine a mount-helper function to change the options of a
+single mountpoint. The fragment is sourced before the mountpoints are remounted,
+so the redefinition replaces the default. One function per mountpoint:
+
+  _boot _boot_efi _run _dev _dev_shm _proc _sys _tmp _var_tmp _var_log
+  _var_cache _var _usr _home _root _srv _media _mnt _opt _etc
+
+Each sets 'mount_folder' and 'intended_mount_options', then calls remount_secure.
+
+Example - also apply noexec to /opt (the default allows exec there):
+
+  sudo tee /etc/remount-secure.d/60_opt-noexec.conf >/dev/null <<'EOF'
+  _opt() {
+    mount_folder="/opt"
+    intended_mount_options="nosuid,nodev,noexec"
+    remount_secure
+  }
+  EOF
+
+Applied on the next boot, or immediately with 'sudo remount-secure --force'
+(no level -> resolves the configured level and sources the overrides).
+
+NOTE: fragments are sourced AS ROOT at boot, so only root may write the drop-in
+directories (enforced: ownership and mode are checked before sourcing). A broken
+override can break boot-time remounting - keep it to the short form above.
+
+Debugging: add 'noremountsecure' to the kernel command line to disable
+remount-secure for a single boot without changing the configured level.
+
+https://www.kicksecure.com/wiki/Noexec

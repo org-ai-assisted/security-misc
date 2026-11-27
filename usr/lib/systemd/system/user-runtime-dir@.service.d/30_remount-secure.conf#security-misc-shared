@@ -1,0 +1,20 @@
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Harden the per-user XDG_RUNTIME_DIR (/run/user/%i) with noexec.
+##
+## systemd-logind mounts this tmpfs nosuid,nodev but NEVER noexec, and exposes no
+## option to change it (the flags are hardcoded in logind), so /run/user/%i
+## bypasses the noexec that remount-secure applies to /run -- it is a separate
+## mount and does not inherit the parent's options.
+##
+## ExecStartPost runs AFTER systemd-user-runtime-dir has created, mounted and
+## chowned the directory, so this never races logind and never trips logind's
+## "already a mount point" skip. remount-secure --runtime-dir adds noexec only at
+## level >= 2 (matching /run) and honors the 'noremountsecure' off-switch.
+##
+## '-' prefix: best-effort. A remount failure must NOT block login (fail open).
+##
+## https://www.kicksecure.com/wiki/Dev/remount-secure
+[Service]
+ExecStartPost=-/usr/bin/remount-secure --runtime-dir %i

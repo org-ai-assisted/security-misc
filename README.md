@@ -611,7 +611,23 @@ would require manual tuning for a given specific system, we handle it by
 creating a very solid configuration file for that very system on package
 installation.
 
-Not enabled by default yet. In development. Help welcome.
+Enabled by default at level 3. Sensitive mount points are remounted `nosuid`
+and `nodev`, plus `noexec` wherever that does not break required functionality.
+The configured level controls how far `noexec` reaches:
+
+- level 1: `nosuid,nodev` only.
+- level 2: adds `noexec` to most mount points (for example `/tmp`, `/var/tmp`,
+  `/run`, `/dev/shm`).
+- level 3: additionally adds `noexec` to `/home` and `/root`.
+
+`noexec` is never applied to every mount point: mount points where executables
+legitimately live keep exec on purpose even at level 3 (for example `/usr`,
+`/var`, `/opt`, `/etc`). A few are always `noexec` regardless of level (for
+example `/boot`, `/dev`, `/var/log`).
+
+Change the level with `remount-secure --set-level N` (0-3; effective on the next
+boot, or immediately via `remount-secure --force N`). The `noremountsecure`
+kernel parameter is a one-boot debug off-switch, equivalent to level 0.
 
 - https://www.kicksecure.com/wiki/Dev/remount-secure
 - https://github.com/Kicksecure/security-misc/issues/157
@@ -759,60 +775,18 @@ See:
 
 - `/usr/share/pam-configs/umask-security-misc`
 
-#### Polyinstantiated temporary directories
+#### User-private temporary directories
 
-The shared, world-writable temporary directories `/tmp`, `/var/tmp`, and
-`/dev/shm` are polyinstantiated per account using the PAM module
-`pam_namespace`, so one account cannot see, read, race, or predict another
-account's temporary files.
+Each user account gets its own unique `/tmp`, `/var/tmp`, and `/dev/shm`, using
+the PAM module `pam_namespace`. This prevents accounts from seeing or
+interfering with other account's temporary files and shared memory. All
+sessions for the same user see the same versions of these directories.
 
-This is stronger than `libpam-tmpdir`, which only sets `$TMPDIR` / `$TMP` and
-is bypassed by any program that hardcodes `/tmp`. `libpam-tmpdir` is kept as
-complementary defense in depth: `pam_namespace` is ordered before it, so
-`$TMPDIR` is set inside the already-private `/tmp`.
-
-All three directories use the `user` method: one instance per account, shared
-across all of that account's PAM sessions. This deliberately includes the
-non-interactive stack (`common-session-noninteractive`), so the `systemd --user`
-manager and cron jobs see the same instance as the interactive login session -
-otherwise, since `systemd --user` runs in its own mount namespace, its services'
-temporary files would land in the global directories (systemd commit `0ef48896`
-documents that `systemd --user` needs its own `pam_namespace` call). `root` is
-excluded, so `su`/`sudo` to root is a no-op. The `unmnt_remnt` flag is
-deliberately not used: for the `user` method, `su` to another account stacks
-that account's instance in the session's own mount namespace (the top mount
-wins and is reclaimed on teardown), so nesting is harmless; `unmnt_remnt` would
-instead `umount` each polydir unconditionally, logging a benign `EINVAL` for
-the on-disk `/var/tmp` in daemon sessions where it is not a mountpoint.
-
-Backing store per directory:
-
-- `/tmp` and `/dev/shm` instances live on a dedicated tmpfs mounted
-  `nosuid,nodev,noexec` (`/run/pam-namespace`, unit `run-pam\x2dnamespace.mount`).
-  They are therefore RAM-backed and wiped at every reboot (matching Debian's
-  `/tmp` convention), and the hardened mount options are inherited through the
-  bind mount - the `user` method cannot set `mntopts` itself, unlike the `tmpfs`
-  method, and a boot-time global remount cannot reach a mount created later, so
-  this dedicated tmpfs is how `/tmp` and `/dev/shm` get `noexec` to mirror the
-  system's global mount-hardening policy.
+- `/tmp` and `/dev/shm` dirs are created in and bind-mounted from
+  `/run/pam-namespace`. These dirs have hardened mount options set to make it
+  more difficult to bypass write-xor-execute hardening.
 - `/var/tmp` uses an on-disk per-account instance under `/var/tmp/tmp-inst/`,
-  which persists across reboots per FHS.
-
-The user's home directory is deliberately not polyinstantiated - that would
-hide the user's own data and only makes sense on SELinux MLS systems. Because a
-freshly created `/tmp` instance has no X11/ICE socket directories, an instance
-init script recreates `/tmp/.X11-unix` and `/tmp/.ICE-unix` mode `1777`.
-
-Activation and reboot: on a freshly built image the feature activates on first
-boot (the mount unit is ordered before `systemd-tmpfiles-setup`, which creates
-the instance-parent directories, both before any user session). When the package
-is instead installed or upgraded on an already-running system, the `postinst`
-mounts the backing tmpfs and creates the instance-parents immediately, so new
-logins are never denied by the just-woven (`required`) module. A reboot is still
-recommended after such an install, because `pam_namespace` only applies to *new*
-sessions: any session already open - including the running `systemd --user`
-manager - keeps its pre-existing view of `/tmp`, `/var/tmp`, and `/dev/shm`
-until it is restarted or the system is rebooted.
+  which persists across reboots.
 
 See:
 
@@ -820,7 +794,7 @@ See:
 - `/etc/security/namespace.d/30_security-misc.conf`
 - `/usr/libexec/security-misc/pam-namespace-init`
 - `/usr/lib/tmpfiles.d/30_security-misc-polyinstantiation.conf`
-- `/usr/lib/systemd/system/run-pam\x2dnamespace.mount`
+- `/usr/lib/systemd/system/run-pam-namespace.mount`
 - https://www.kicksecure.com/wiki/Dev/Strong_Linux_User_Account_Isolation
 
 ### SUID / SGID removal and permission hardening
@@ -889,11 +863,11 @@ See:
 
 A dracut module bundles the emergency shutdown binary, its systemd service,
 and configuration files into the initramfs so the panic key sequence is
-available even during early boot. A udev rule restarts the service whenever
-a keyboard is added or removed. See:
+available even during early boot. The service watches `/dev/input` with
+inotify, so keyboards plugged in after startup are monitored for the panic
+key sequence without restarting the service. See:
 
 - `/usr/lib/dracut/modules.d/99emerg-shutdown/module-setup.sh`
-- `/usr/lib/udev/rules.d/95-emerg-shutdown.rules`
 
 ## File Manager D-Bus shim
 
@@ -1052,8 +1026,8 @@ These can be opted-in by the user:
 - `permission-hardener.service` - Applies permission hardening at boot.
   See [permission-hardener.service](https://www.kicksecure.com/wiki/SUID_Disabler_and_Permission_Hardener#permission-hardener.service).
 
-- `remount-secure.service` - Remounts filesystems with hardened options.
-  In development. See [Remount Secure](https://www.kicksecure.com/wiki/Dev/remount-secure).
+- `remount-secure.service` - Remounts filesystems with hardened mount options;
+  enabled by default at level 3. See [Remount Secure](https://www.kicksecure.com/wiki/Dev/remount-secure).
 
 - `proc-hidepid.service` - Mounts `/proc` with `hidepid=2`.
   See [hidepid](https://www.kicksecure.com/wiki/Security-misc#hidepid).
