@@ -146,4 +146,22 @@ assert_contains 'stale-level fallback' "${out}" 'reading remount-secure drop-in 
 assert_contains 'stale-level fallback' "${out}" 'INFO: level 3/3'
 assert_absent   'stale-level fallback' "${out}" 'Not using remount-secure'
 
+## '--get-effective-level' reports the level ACTUALLY enforced, so the
+## 'noremountsecure' off-switch wins (-> 0), UNLIKE '--get-level' which reports
+## only the persistent drop-in level. A status check (systemcheck) must use the
+## effective query or it reports a reassuring level while hardening is disabled.
+printf '%s\n' 'BOOT_IMAGE=/vmlinuz ro quiet' > "${tmp_cmdline}"
+out="$(HELPER_SCRIPTS_PATH=/nonexistent remount_secure_cmdline_file="${tmp_cmdline}" \
+  bash -- "${rs_bin}" --get-effective-level 2>/dev/null)"
+[ "${out}" = "3" ] || fail "--get-effective-level without noremountsecure should be 3, got '${out}'."
+
+printf '%s\n' 'BOOT_IMAGE=/vmlinuz noremountsecure ro quiet' > "${tmp_cmdline}"
+out="$(HELPER_SCRIPTS_PATH=/nonexistent remount_secure_cmdline_file="${tmp_cmdline}" \
+  bash -- "${rs_bin}" --get-effective-level 2>/dev/null)"
+[ "${out}" = "0" ] || fail "--get-effective-level with noremountsecure should be 0, got '${out}'."
+
+out="$(HELPER_SCRIPTS_PATH=/nonexistent remount_secure_cmdline_file="${tmp_cmdline}" \
+  bash -- "${rs_bin}" --get-level 2>/dev/null)"
+[ "${out}" = "3" ] || fail "--get-level must ignore noremountsecure (drop-in 3), got '${out}'."
+
 printf '%s\n' "PASS: remount-secure option parsing / level resolution"

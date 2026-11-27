@@ -599,6 +599,15 @@ main() {
          get_level
          exit 0
          ;;
+      --get-effective-level)
+         ## The level ACTUALLY enforced at boot: the 'noremountsecure' kernel
+         ## cmdline off-switch (-> 0) wins over the drop-in configuration. A
+         ## status check (systemcheck) must use this, not '--get-level', or a
+         ## 'noremountsecure' boot reports the persistent level while hardening is
+         ## actually off.
+         resolve_effective_level
+         exit 0
+         ;;
       --set-level)
          shift
          set_level "${1:-}"
