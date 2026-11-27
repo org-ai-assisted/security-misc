@@ -71,6 +71,14 @@ out="$(bash -- "${rs_bin}" --check 1 2>&1 || true)"
 assert_contains 'level 1' "${out}" 'INFO: level 1/3'
 assert_absent   'level 1' "${out}" 'using noexec for all: yes'
 
+## Multiple explicit levels on argv: the last one wins cleanly.
+## 'level_to_mount_options' resets its noexec flags on each call; without that,
+## '3 2' bleeds the level-3 /home noexec into the level-2 result and the summary
+## wrongly reports 'noexec for all'.
+out="$(bash -- "${rs_bin}" --check 3 2 2>&1 || true)"
+assert_contains 'multi-level 3 2' "${out}" 'using noexec for most (not all): yes'
+assert_absent   'multi-level 3 2' "${out}" 'using noexec for all: yes'
+
 ## Level 0: opt out entirely (exit 0, explicit warning).
 rc=0
 out="$(bash -- "${rs_bin}" --check 0 2>&1)" || rc=$?
@@ -89,8 +97,10 @@ done
 ## No explicit level: resolve from the drop-in config / cmdline. A fake cmdline
 ## file is injected so the test does not depend on the host's real /proc/cmdline.
 tmp_cmdline="$(mktemp -t rs-parse-cmdline.XXXXXX)"
+stub_helpers=''
 cleanup() {
   safe-rm --force -- "${tmp_cmdline}"
+  [ -z "${stub_helpers}" ] || safe-rm --recursive --force -- "${stub_helpers}"
 }
 trap cleanup EXIT
 
@@ -109,5 +119,27 @@ out="$(HELPER_SCRIPTS_PATH=/nonexistent remount_secure_cmdline_file="${tmp_cmdli
   bash -- "${rs_bin}" --check 2>&1)" || rc=$?
 [ "${rc}" -eq 0 ] || fail "noremountsecure --check should exit 0, got ${rc}."
 assert_contains 'noremountsecure' "${out}" 'Not using remount-secure'
+
+## A drop-in read that FAILS after a fragment already set the level must fall
+## back to the ANNOUNCED default (3), never retain the stale partial value. Stub
+## a source_folder.bsh whose 'source_config' sets a level and then returns
+## non-zero -- exactly the 'an earlier fragment set remount_secure_level, a later
+## fragment failed bash -n' case. Without the failure-branch reset, the stale
+## level 0 wins and the audit wrongly reports an opt-out (fail-open + a warning
+## that lies about the level in effect).
+stub_helpers="$(mktemp --directory -t rs-stub-helpers.XXXXXX)"
+mkdir --parents -- "${stub_helpers}/usr/libexec/helper-scripts"
+{
+  printf '%s\n' 'source_config() {'
+  printf '%s\n' '  remount_secure_level=0'
+  printf '%s\n' '  return 1'
+  printf '%s\n' '}'
+} > "${stub_helpers}/usr/libexec/helper-scripts/source_folder.bsh"
+printf '%s\n' 'BOOT_IMAGE=/vmlinuz ro quiet' > "${tmp_cmdline}"
+out="$(HELPER_SCRIPTS_PATH="${stub_helpers}" remount_secure_cmdline_file="${tmp_cmdline}" \
+  bash -- "${rs_bin}" --check 2>&1 || true)"
+assert_contains 'stale-level fallback' "${out}" 'reading remount-secure drop-in configuration failed'
+assert_contains 'stale-level fallback' "${out}" 'INFO: level 3/3'
+assert_absent   'stale-level fallback' "${out}" 'Not using remount-secure'
 
 printf '%s\n' "PASS: remount-secure option parsing / level resolution"

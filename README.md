@@ -611,9 +611,23 @@ would require manual tuning for a given specific system, we handle it by
 creating a very solid configuration file for that very system on package
 installation.
 
-Enabled by default at level 3 (nosuid, nodev and noexec for all mount points,
-including /home). Override via the `remountsecure=0..2` kernel parameter or
-`remount-secure --set-level N`.
+Enabled by default at level 3. Sensitive mount points are remounted `nosuid`
+and `nodev`, plus `noexec` wherever that does not break required functionality.
+The configured level controls how far `noexec` reaches:
+
+- level 1: `nosuid,nodev` only.
+- level 2: adds `noexec` to most mount points (for example `/tmp`, `/var/tmp`,
+  `/run`, `/dev/shm`).
+- level 3: additionally adds `noexec` to `/home` and `/root`.
+
+`noexec` is never applied to every mount point: mount points where executables
+legitimately live keep exec on purpose even at level 3 (for example `/usr`,
+`/var`, `/opt`, `/etc`). A few are always `noexec` regardless of level (for
+example `/boot`, `/dev`, `/var/log`).
+
+Change the level with `remount-secure --set-level N` (0-3; effective on the next
+boot, or immediately via `remount-secure --force N`). The `noremountsecure`
+kernel parameter is a one-boot debug off-switch, equivalent to level 0.
 
 - https://www.kicksecure.com/wiki/Dev/remount-secure
 - https://github.com/Kicksecure/security-misc/issues/157

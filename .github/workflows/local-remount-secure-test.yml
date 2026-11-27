@@ -57,6 +57,15 @@ jobs:
       - name: remount-secure option-parsing regression test
         run: ci/tests/remount_secure/test_parse_level.sh
 
+      ## ubuntu-24.04 runners restrict unprivileged user namespaces via AppArmor,
+      ## which the check-no-write test needs to simulate root. Lift the restriction
+      ## where the knob exists; a no-op on kernels without it.
+      - name: Enable unprivileged user namespaces
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl --write kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
       ## Audit (--check) must not write; simulates root via unprivileged userns.
       - name: remount-secure check-no-write regression test
         run: ci/tests/remount_secure/test_check_no_write.sh

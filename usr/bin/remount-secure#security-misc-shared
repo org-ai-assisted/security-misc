@@ -88,6 +88,11 @@ require_root_maybe() {
 }
 
 level_to_mount_options() {
+   ## Authoritative per call: reset the level-gated noexec flags so a repeated
+   ## call (e.g. multiple level args) does not bleed a higher level's noexec into
+   ## a lower one. The last level on argv wins cleanly.
+   most_noexec_maybe=''
+   home_noexec_maybe=''
    case "${1:-}" in
       0)
          "${output_command[@]}" "WARNING: Not using remount-secure."
@@ -494,6 +499,11 @@ read_dropin_level() {
       # shellcheck source=../../../helper-scripts/usr/libexec/helper-scripts/source_folder.bsh
       source "${source_folder_helper}"
       if ! source_config "${remount_secure_etc_dropin_dir}" "${remount_secure_local_dropin_dir}"; then
+         ## A failed read may have partially set the level before aborting. Clear
+         ## it so the announced default-level fallback is truthful and fails
+         ## closed (the most restrictive level), not stuck on a stale partial
+         ## value that could be an opt-out.
+         remount_secure_level=''
          printf '%s\n' "$0: WARNING: reading remount-secure drop-in configuration failed; using default level ${remount_secure_default_level}." >&2
       fi
    fi
